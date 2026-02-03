@@ -6,8 +6,6 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -122,7 +120,6 @@ class MainActivity : ComponentActivity() {
         buffer.order(ByteOrder.nativeOrder())
         buffer.put(bytes)
         buffer.rewind()
-
         // 3. Возвращаем интерпретатор
         return Interpreter(buffer)
     }
