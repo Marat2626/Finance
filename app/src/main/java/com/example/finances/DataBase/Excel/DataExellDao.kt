@@ -18,16 +18,14 @@ interface DataExellDao {
     @Query("SELECT * FROM DateExcel WHERE typeOfOperation = 'Зачисления'")
     fun getAllIncome(): Flow<List<DateExcel>>
 
-    @Query("SELECT * FROM DateExcel WHERE category = 'На инвестиции'")
+    @Query("SELECT * FROM DateExcel WHERE typeOfOperation = 'Накопление'")
     fun getAllSave(): Flow<List<DateExcel>>
 
 
-    @Query("SELECT SUM(amount) FROM DateExcel WHERE category = 'На инвестиции'")
+    @Query("SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Накопление'")
     fun getTotalSave(): Flow<Double?>
     @Query("SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Расходы'")
     fun getTotalExpenses(): Flow<Double?>
-
-
 
     @Query("SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Зачисления'")
     fun getTotalIncomes(): Flow<Double?>

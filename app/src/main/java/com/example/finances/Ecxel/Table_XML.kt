@@ -6,6 +6,18 @@ import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 
 
+
+
+
+fun twoReadExcelFiles(context: Context, fileName1: String, fileName2: String):  List<DateExcel>{
+    val allTransactions = mutableListOf<DateExcel>()
+
+    allTransactions.addAll(readExcelFiles(context, fileName1))
+
+    allTransactions.addAll(readExcelFiles(context, fileName2))
+
+    return allTransactions
+}
 fun readExcelFiles(context: Context, fileName: String): List<DateExcel>{
     val inputStream = context.assets.open(fileName)
     val transaction = mutableListOf<DateExcel>()

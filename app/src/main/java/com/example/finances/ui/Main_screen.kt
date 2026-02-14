@@ -1,5 +1,6 @@
 package com.example.finances
 
+import android.app.Application
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,36 +16,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.Flow
 import java.nio.file.WatchEvent
 
 @Composable
 fun mainScreen(onClipExpenses:() -> Unit, onClipIncomes:() -> Unit, onClipSave:() -> Unit, onClipAddGoal: () -> Unit) {
 
-    val viewModelE: ExpensesViewModel = viewModel()
-    val viewModelI: IncomesViewModel = viewModel()
+
     val viewModelB: BalanseViewModel = viewModel()
-    val viewModelS: SaveViewModel = viewModel()
-
-
-    val totalAmountE by viewModelE.totalAmount.collectAsState()
-    val totalAmountI by viewModelI.totalAmount.collectAsState()
-    val totalAmountS by viewModelS.totalAmount.collectAsState()
     val balance by viewModelB.balance.collectAsState()
 
-//    val expenses by viewModelE.transactions.collectAsState()
-//    val incomes by viewModelI.transactions.collectAsState()
-//
-//
-//    LaunchedEffect(expenses, incomes) {
-//        Log.d("MAIN_SCREEN", "Кол-во расходов: ${expenses.size}, сумма: $totalAmountE")
-//        Log.d("MAIN_SCREEN", "Кол-во доходов: ${incomes.size}, сумма: $totalAmountI")
-//    }
+    val context = LocalContext.current
+    val db = DataTransactions.getDatabase(context.applicationContext as Application)
+
+    val totalAmountE by db.dataExcelDao().getTotalExpenses().collectAsState(initial = 0.0)
+
+    val totalAmountI by db.dataExcelDao().getTotalIncomes().collectAsState(initial = 0.0)
+
+    val totalAmountS by db.dataExcelDao().getTotalSave().collectAsState(initial = 0.0)
+
+
+
 
   Column(
       modifier = Modifier
@@ -131,7 +131,7 @@ fun mainScreen(onClipExpenses:() -> Unit, onClipIncomes:() -> Unit, onClipSave:(
     }
 }
 @Composable
-fun look(name: String, sum: Double, colorBorder: Brush, onClip:() -> Unit){
+fun look(name: String, sum: Double?, colorBorder: Brush, onClip:() -> Unit){
     Row(modifier = Modifier
         .clickable { onClip() }
         .width(300.dp)

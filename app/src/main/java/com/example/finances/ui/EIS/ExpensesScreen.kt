@@ -1,6 +1,7 @@
 package com.example.finances
 
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -23,16 +24,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+
 @Composable
 fun expensesScren() {
 
-    val viewModelE: ExpensesViewModel = viewModel()
+    val context = LocalContext.current
+    val app = context.applicationContext as Application
+
+    val viewModelE: EISviewModel = viewModel(
+        factory = EISViewModelFactory(app, { it.getAllExpenses() }, "Расходы")
+    )
+
     val viewModelB: BalanseViewModel = viewModel()
 
     val balance by viewModelB.balance.collectAsState()

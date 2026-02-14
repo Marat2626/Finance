@@ -1,5 +1,7 @@
 package com.example.finances
 
+import android.app.Application
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -36,6 +38,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,10 +54,16 @@ fun StartScreen(onClipMainScreen:() -> Unit,
                 onClipSettingBalance: () -> Unit
 ) {
 
-
-    val viewModelE: ExpensesViewModel = viewModel()
-    val viewModelI: IncomesViewModel = viewModel()
+    val context = LocalContext.current
+    val app = context.applicationContext as Application
     val scope = rememberCoroutineScope()
+
+    val importViewModel: EISviewModel = viewModel(
+        key = "import",
+        factory = EISViewModelFactory(app, { it.GetAll() }, "Импорт")
+    )
+
+
 
     Box(
         Modifier
@@ -109,12 +119,12 @@ fun StartScreen(onClipMainScreen:() -> Unit,
                 colorText = AppColors.sberGreenGradientV,
                 colorboard = AppColors.sberGreenGradientL,
                 onClick1 = {
-                        scope.launch {
-                            viewModelI.addTransactionsFromExcel("Income.xlsx")
-                            viewModelE.addTransactionsFromExcel("Expenses.xlsx")
-                            delay(500)
-                            onClipSber()
-                        }
+                    scope.launch {
+                        // ✅ Используем метод ViewModel
+                        importViewModel.addTransactionsFromExcel("Income.xlsx", "Expenses.xlsx")
+                        delay(500)
+                        onClipSber()
+                    }
 
                 }
             )
