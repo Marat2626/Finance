@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 class BalanseViewModel(application: Application) : AndroidViewModel(application) {
     private val db = DataTransactions.Companion.getDatabase(application)
-    private val _balance = MutableStateFlow<Double?>(null)
+    private val _balance = MutableStateFlow<Double?>(0.0)
     val balance: StateFlow<Double?> = _balance.asStateFlow()
 
     init {
@@ -23,17 +23,19 @@ class BalanseViewModel(application: Application) : AndroidViewModel(application)
     fun loadBalanceFromDb() {
         viewModelScope.launch {
             val balanceEntity = db.balanceDao().getBalance()
-            _balance.value = balanceEntity?.amount
+            _balance.value = balanceEntity?.amount?: 0.0
             Log.d("Balance", "💰 Загружен баланс из БД: ${balanceEntity?.amount}")
         }
     }
     fun saveBalance(amount: Double?, salary: Double?) {
         if (amount != null) {
             viewModelScope.launch {
+
+
                 val balance = Balance(
                     id = 1,
                     amount = amount,
-                    salary = salary
+                    salary = salary?: 0.0
                 )
                 db.balanceDao().insertOrUpdate(balance)
                 Log.d("Balance", "💾 Сохранен баланс: $amount ₽")
@@ -42,5 +44,6 @@ class BalanseViewModel(application: Application) : AndroidViewModel(application)
                 prefs.edit().putBoolean("balance_set", true).apply()
             }
         }
+
     }
 }

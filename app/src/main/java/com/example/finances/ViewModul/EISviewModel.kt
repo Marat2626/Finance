@@ -1,22 +1,20 @@
 package com.example.finances
 
 import android.app.Application
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.finances.DataTransactions
-import com.example.finances.DateExcel
-import com.example.finances.readExcelFiles
-import com.example.finances.twoReadExcelFiles
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 open class EISviewModel(
     application: Application,
@@ -38,8 +36,13 @@ open class EISviewModel(
         }
     }
 
+    fun getCategory ():Flow<List<DateExcel>> {
 
-    fun addManualSave(amount: Double, category: String, ) {
+        return db.dataExcelDao().GetAll()
+
+    }
+
+    fun addManualSave(amount: Double, category: String, description: String ) {
         viewModelScope.launch {
             Log.d("DEBUG", "=== addManualSave ===")
             Log.d("DEBUG", "operationType: $operationType")
@@ -48,52 +51,98 @@ open class EISviewModel(
             try {
                 Log.d("Excel", "Начинаем загрузку $amount")
                 val saveEntity = DateExcel(
-                    date = "",
-                    id = 0,
+                    date = LocalDateTime.now(),
                     typeOfOperation = operationType,
                     category = category,
                     amount = amount,
                     currency = "Руб",
-                    description = "",
+                    description = description,
                     status = "Выполнено",
                     debitCardNumber = "",
                 )
-                Log.d("DEBUG", "Сохраняю: typeOfOperation=${saveEntity.typeOfOperation}")
+                Log.d("DEBUG", "Сохраняю: typeOfOperation=${saveEntity.typeOfOperation} $operationType")
                 db.dataExcelDao().insert(saveEntity)
             } catch (e: Exception) {
                 Log.e("save", "Ошибка загрузки save", e)
             }
         }
     }
+    fun loadData() {
+        viewModelScope.launch {
+            daoMethod(db.dataExcelDao()).collect { list ->
+                _transactions.value = list
+            }
+        }
+    }
 
-    fun addTransactionsFromExcel(fileName1: String, fileName2: String) {
+//    fun addTransactionsFromExcel(fileName1: String, fileName2: String) {
+//        viewModelScope.launch {
+//            try {
+//                Log.d("Excel", "Начинаем загрузку $fileName1 и $fileName2")
+//                val context = getApplication<Application>()
+//                val excelTransactions = twoReadExcelFiles(context, fileName1, fileName2)
+//
+//                excelTransactions.forEach { transaction ->
+//                    // Сохраняем оригинал
+//                    db.dataExcelDao().insert(transaction)
+//
+//                    // Если это накопление - дублируем как Накопление
+//                    if (transaction.typeOfOperation == "Расходы" && transaction.category == "На инвестиции") {
+//                        val savingTransaction = transaction.copy(
+//                            typeOfOperation = "Накопление"
+//                        )
+//                        db.dataExcelDao().insert(savingTransaction)
+//                    }
+//                }
+//
+//                Log.d("Excel", "Импортировано ${excelTransactions.size} записей")
+//
+//            } catch (e: Exception) {
+//                Log.e("Excel", "Ошибка загрузки Excel", e)
+//            }
+//        }
+//    }
+
+
+
+    // Добавьте в EISviewModel.kt
+    fun addTransactionsFromUri(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                Log.d("Excel", "Начинаем загрузку $fileName1 и $fileName2")
-                val context = getApplication<Application>()
-                val excelTransactions = twoReadExcelFiles(context, fileName1, fileName2)
+                Log.d("Excel", "Начинаем загрузку из URI")
+                val inputStream = context.contentResolver.openInputStream(uri)
 
-                excelTransactions.forEach { transaction ->
-                    // Сохраняем оригинал
-                    db.dataExcelDao().insert(transaction)
+                if (inputStream != null) {
+                    // Используем существующий метод парсинга из Table_XML.kt
+                    val excelTransactions = readExcelFromStream(inputStream, uri.toString())
 
-                    // Если это накопление - дублируем как Накопление
-                    if (transaction.typeOfOperation == "Расходы" && transaction.category == "На инвестиции") {
-                        val savingTransaction = transaction.copy(
-                            typeOfOperation = "Накопление"
-                        )
-                        db.dataExcelDao().insert(savingTransaction)
+                    excelTransactions.forEach { transaction ->
+                        db.dataExcelDao().insert(transaction)
+
+                        // Если это накопление - дублируем как Накопление
+                        if (transaction.typeOfOperation == "Расходы" && transaction.category == "На инвестиции") {
+                            val savingTransaction = transaction.copy(
+                                typeOfOperation = "Накопление"
+                            )
+                            db.dataExcelDao().insert(savingTransaction)
+                        }
                     }
+
+                    Log.d("Excel", "Импортировано ${excelTransactions.size} записей из URI")
+                    inputStream.close()
+                } else {
+                    Log.e("Excel", "Не удалось открыть файл")
                 }
 
-                Log.d("Excel", "Импортировано ${excelTransactions.size} записей")
-
             } catch (e: Exception) {
-                Log.e("Excel", "Ошибка загрузки Excel", e)
+                Log.e("Excel", "Ошибка загрузки Excel из URI", e)
             }
         }
     }
 }
+
+
+
 //
 //    val totalAmount: StateFlow<Double> = _transactions
 //
