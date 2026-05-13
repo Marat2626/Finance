@@ -7,10 +7,9 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 
-
 @Database(entities = [DateExcel::class,
     Balance::class,
-    Save::class,
+    PlanSettings::class,
     DataGoal::class,
     CategorySettings::class,
     ExpenseSettings::class ],
@@ -19,10 +18,11 @@ import androidx.room.TypeConverters
 abstract class DataTransactions: RoomDatabase() {
     abstract fun dataExcelDao(): DataExellDao
     abstract fun balanceDao(): BalanceDao
-    abstract fun saveDao(): SaveDao
+//    abstract fun saveDao(): SaveDao
     abstract fun goalDao(): GoalDao
     abstract fun expenseSettingsDao(): ExpenseSettingsDao
     abstract fun categorySettingsDao(): CategorySettingsDao
+    abstract fun planSettingsDao(): PlanSettingsDao
     companion object{
         fun getDatabase(context: Context): DataTransactions{
             return Room.databaseBuilder(

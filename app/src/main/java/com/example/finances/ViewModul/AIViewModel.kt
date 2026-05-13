@@ -1,12 +1,13 @@
 package com.example.finances
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -23,9 +24,6 @@ class AIViewModel(application: Application) : AndroidViewModel(application) {
     private val _monthlyExpenses = MutableStateFlow(0.0)
     val monthlyExpenses: StateFlow<Double> = _monthlyExpenses.asStateFlow()
 
-    private val _goals = MutableStateFlow<List<Goal>>(emptyList())
-    val goals: StateFlow<List<Goal>> = _goals.asStateFlow()
-
     private val _expenses = MutableStateFlow<List<DateExcel>>(emptyList())
     val expenses: StateFlow<List<DateExcel>> = _expenses.asStateFlow()
 
@@ -38,61 +36,47 @@ class AIViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadAllData() {
         viewModelScope.launch {
-            // 1. Загружаем баланс
-            val balanceEntity = db.balanceDao().getBalance()
-            _totalBalance.value = balanceEntity?.amount ?: 0.0
-            println("AIViewModel: Баланс = ${_totalBalance.value}")
-
-            // 2. Загружаем цели
-            db.goalDao().getAllGoals().collect { goalsList ->
-                _goals.value = goalsList.map { dataGoal ->
-                    Goal(
-                        name = dataGoal.name,
-                        targetAmount = dataGoal.amount ?: 0.0,
-                        currentAmount = dataGoal.savedAmount,
-                        deadline = dataGoal.createdDate?.let {
-                            if (dataGoal.monthsCount > 0) {
-                                it.plusMonths(dataGoal.monthsCount.toLong()).toString()
-                            } else null
-                        }
-                    )
-                }
-                println("AIViewModel: Загружено целей = ${_goals.value.size}")
-                _goals.value.forEach { goal ->
-                    println("  Цель: ${goal.name}, нужно: ${goal.targetAmount}, накоплено: ${goal.currentAmount}")
+            // 1. Баланс
+            launch {
+                db.balanceDao().getBalanceFlow().collectLatest { balance ->
+                    _totalBalance.value = balance ?: 0.0
+                    Log.d("AIViewModel", "Баланс загружен: ${_totalBalance.value}")
                 }
             }
 
-            // 3. Загружаем все транзакции
-            db.dataExcelDao().getAllExpenses().collect { allExpenses ->
-                _expenses.value = allExpenses
+            // 2. Все транзакции
+            launch {
+                db.dataExcelDao().GetAll().collectLatest { allTransactions ->
+                    _expenses.value = allTransactions
+                    Log.d("AIViewModel", "Транзакций загружено: ${allTransactions.size}")
 
-                val now = LocalDateTime.now()
-                val startOfMonth = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0)
+                    val now = LocalDateTime.now()
+                    val startOfMonth = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0)
 
-                val income = allExpenses
-                    .filter { it.typeOfOperation == "Доходы" && it.date.isAfter(startOfMonth) }
-                    .sumOf { it.amount }
+                    // Доходы за месяц
+                    val currentMonthIncome = allTransactions
+                        .filter { it.typeOfOperation == "Зачисления" && it.date >= startOfMonth }
+                        .sumOf { it.amount }
 
-                val expense = allExpenses
-                    .filter { it.typeOfOperation == "Расходы" && it.date.isAfter(startOfMonth) }
-                    .sumOf { it.amount }
+                    // Расходы за месяц
+                    val currentMonthExpenses = allTransactions
+                        .filter { it.typeOfOperation == "Расходы" && it.date >= startOfMonth }
+                        .sumOf { it.amount }
 
-                _monthlyIncome.value = income
-                _monthlyExpenses.value = expense
+                    _monthlyIncome.value = currentMonthIncome
+                    _monthlyExpenses.value = currentMonthExpenses
 
-                println("AIViewModel: Доходы за месяц = $income")
-                println("AIViewModel: Расходы за месяц = $expense")
+                    Log.d("AIViewModel", "Доходы: $currentMonthIncome, Расходы: $currentMonthExpenses")
 
-                // 4. Считаем расходы по категориям
-                val categoryMap = allExpenses
-                    .filter { it.typeOfOperation == "Расходы" }
-                    .groupBy { it.category }
-                    .mapValues { it.value.sumOf { exp -> exp.amount } }
-                    .mapValues { it.value.toInt() }
+                    // Расходы по категориям
+                    val categoryMap = allTransactions
+                        .filter { it.typeOfOperation == "Расходы" }
+                        .groupBy { it.category }
+                        .mapValues { it.value.sumOf { exp -> exp.amount }.toInt() }
 
-                _categories.value = categoryMap
-                println("AIViewModel: Категорий = ${categoryMap.size}")
+                    _categories.value = categoryMap
+                    Log.d("AIViewModel", "Категорий: ${categoryMap.size}")
+                }
             }
         }
     }

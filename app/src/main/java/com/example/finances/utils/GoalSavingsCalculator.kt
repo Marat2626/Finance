@@ -122,9 +122,9 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             Log.d("GOAL_CALC", "Доход до 130 000 ₽, ")
 
             return listOf(
-                createStrategy("Комфортное", monthlyComfort, goalAmount, "😌", "Можно почти не менять привычки"),
-                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, "⚖️", "Разумный баланс"),
-                createStrategy("Жёсткое", monthlyHard, goalAmount, "🔥", "Максимально быстро")
+                createStrategy("Комфортное", monthlyComfort, goalAmount, R.drawable.moneysave, "Можно почти не менять привычки"),
+                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, R.drawable.balancingmoney, "Разумный баланс"),
+                createStrategy("Жёсткое", monthlyHard, goalAmount, R.drawable.monyy, "Максимально быстро")
             )
         }
 
@@ -150,9 +150,9 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             Log.d("GOAL_CALC", "Доход до 250 000 ₽, цель ${if (goalAmount <= 120000) "≤120к" else ">120к"} → $comfortPercent, $balancedPercent, $hardPercent")
 
             return listOf(
-                createStrategy("Комфортное", monthlyComfort, goalAmount, "😌", "Можно почти не менять привычки"),
-                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, "⚖️", "Разумный баланс"),
-                createStrategy("Жёсткое", monthlyHard, goalAmount, "🔥", "Максимально быстро")
+                createStrategy("Комфортное", monthlyComfort, goalAmount, R.drawable.moneysave, "Можно почти не менять привычки"),
+                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, R.drawable.balancingmoney, "Разумный баланс"),
+                createStrategy("Жёсткое", monthlyHard, goalAmount, R.drawable.monyy, "Максимально быстро")
             )
         }
 
@@ -178,9 +178,9 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             Log.d("GOAL_CALC", "Доход до 350 000 ₽, ")
 
             return listOf(
-                createStrategy("Комфортное", monthlyComfort, goalAmount, "😌", "Можно почти не менять привычки"),
-                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, "⚖️", "Разумный баланс"),
-                createStrategy("Жёсткое", monthlyHard, goalAmount, "🔥", "Максимально быстро")
+                createStrategy("Комфортное", monthlyComfort, goalAmount, R.drawable.moneysave, "Можно почти не менять привычки"),
+                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, R.drawable.balancingmoney, "Разумный баланс"),
+                createStrategy("Жёсткое", monthlyHard, goalAmount, R.drawable.monyy, "Максимально быстро")
             )
         }
 
@@ -212,9 +212,9 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             Log.d("GOAL_CALC", "Доход до 500 000 ₽, ")
 
             return listOf(
-                createStrategy("Комфортное", monthlyComfort, goalAmount, "😌", "Можно почти не менять привычки"),
-                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, "⚖️", "Разумный баланс"),
-                createStrategy("Жёсткое", monthlyHard, goalAmount, "🔥", "Максимально быстро")
+                createStrategy("Комфортное", monthlyComfort, goalAmount, R.drawable.moneysave, "Можно почти не менять привычки"),
+                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, R.drawable.balancingmoney, "Разумный баланс"),
+                createStrategy("Жёсткое", monthlyHard, goalAmount, R.drawable.monyy, "Максимально быстро")
             )
         }
 
@@ -245,9 +245,11 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             Log.d("GOAL_CALC", "Доход до  не ограничен ₽, ")
 
             return listOf(
-                createStrategy("Комфортное", monthlyComfort, goalAmount, "😌", "Можно почти не менять привычки"),
-                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, "⚖️", "Разумный баланс"),
-                createStrategy("Жёсткое", monthlyHard, goalAmount, "🔥", "Максимально быстро")
+                createStrategy("Комфортное", monthlyComfort, goalAmount, R.drawable.moneysave, "Можно почти не менять привычки"),
+                createStrategy("Сбалансированное", monthlyBalanced, goalAmount, R.drawable.balancingmoney, "Разумный баланс"),
+                createStrategy("Жёсткое", monthlyHard, goalAmount, R.drawable.monyy, "Максимально быстро"),
+                createStrategy("Своя сумма", monthlyHard, goalAmount,R.drawable.ves4 , "Своя сумма")
+
             )
         }
 
@@ -260,7 +262,7 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
         name: String,
         monthlyPayment: Double,
         goalAmount: Double,
-        emoji: String,
+        id: Int,
         desc: String
     ): StrategyRecommendation {
         // Максимальный платеж: не больше цели, и чтобы срок был минимум 1 месяц
@@ -291,7 +293,7 @@ class GoalSavingsCalculator(private val db: DataTransactions) {
             name = name,
             months = months,
             monthlyPayment = finalMonthly,
-            emoji = emoji,
+            id = id,
             description = desc
         )
 
@@ -305,6 +307,6 @@ data class StrategyRecommendation(
     val name: String,
     val months: Int,
     val monthlyPayment: Double,
-    val emoji: String,
+    val id: Int,
     val description: String
 )

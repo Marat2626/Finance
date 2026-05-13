@@ -1,4 +1,3 @@
-
 package com.example.finances
 
 import android.app.Application
@@ -17,6 +16,7 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
 
     data class ExpenseWithImportance(
         val description: String,
+        val amount: Double = 0.0,
         val importance: ImportanceType? = null,
         val isUserDefined: Boolean = false
     )
@@ -33,24 +33,27 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
     private val _selectedExpenses = MutableStateFlow<Map<String, ImportanceType>>(emptyMap())
     val selectedExpenses: StateFlow<Map<String, ImportanceType>> = _selectedExpenses.asStateFlow()
 
+
     fun loadExpensesWithSettings() {
         viewModelScope.launch {
             val allExpenses = db.dataExcelDao().getAllExpenses().first()
             val savedSettings = db.expenseSettingsDao().getAllSettings().first()
 
-            // Группируем расходы по категориям
             val expensesByCategory = allExpenses.groupBy { it.category }
 
             val result = expensesByCategory.map { (category, expenses) ->
-                // Уникальные описания в этой категории
                 val uniqueDescriptions = expenses.map { it.description }.distinct()
 
                 val expensesWithImportance = uniqueDescriptions.map { description ->
-                    val saved = savedSettings.find { it.category == category && it.description == description }
+                    val saved = savedSettings.find {
+                        it.category == category && it.description == description
+                    }
+                    val amount = expenses.filter { it.description == description }.sumOf { it.amount }
                     ExpenseWithImportance(
                         description = description,
+                        amount = amount,
                         importance = saved?.importance,
-                        isUserDefined = saved != null
+                        isUserDefined = saved != null,
                     )
                 }
 
@@ -66,61 +69,48 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
+    /**
+     * Сохраняет выбранные подкатегории.
+     * При сохранении подкатегорий удаляет общую категорию из category_settings
+     */
     fun saveSelectedExpenses(selections: Map<String, ImportanceType>) {
         viewModelScope.launch {
             try {
-                if (selections.isEmpty()) {
-                    Log.d("ExpenseVM_SAVE", "⚠️ Нет выбранных настроек")
-                    return@launch
-                }
+                if (selections.isEmpty()) return@launch
 
+                // 1. Определяем категорию (берем из первого ключа)
+                val category = selections.keys.first().split("|||")[0]
 
-                val firstKey = selections.keys.first()
-                val category = firstKey.split("|||")[0]
+                // 2. Удаляем общую настройку для этой категории из category_settings
+                db.categorySettingsDao().deleteByCategory(category)
+                Log.d("ExpenseVM", "Удалена общая категория: $category")
 
-
-                Log.d("ExpenseVM_SAVE", "══════════════════════════════════════════════")
-                Log.d("ExpenseVM_SAVE", "СОХРАНЕНИЕ ДЕТАЛЬНЫХ НАСТРОЕК")
-                Log.d("ExpenseVM_SAVE", "Категория: $category | Выбрано описаний: ${selections.size}")
-
-
-                // Удаляем старые настройки
+                // 3. Удаляем старые детальные настройки для этой категории
                 db.expenseSettingsDao().deleteByCategory(category)
 
-
+                // 4. Сохраняем новые детальные настройки
                 val toSave = selections.map { (key, importance) ->
                     val parts = key.split("|||")
-                    val desc = parts[1]
-                    Log.d("ExpenseVM_SAVE", "   • $desc → $importance")
                     ExpenseSettings(
                         category = parts[0],
-                        description = desc,
+                        description = parts[1],
                         importance = importance,
                         isUserDefined = true
                     )
                 }
 
-
                 db.expenseSettingsDao().insertAll(toSave)
-                Log.d("ExpenseVM_SAVE", "✅ Сохранено ${toSave.size} записей")
 
+                Log.d("ExpenseVM", "Сохранено ${toSave.size} подкатегорий для: $category")
 
-                // ←←← ГЛАВНОЕ: подсчёт реальных сумм по транзакциям
-                calculateAndLogDetailedSums(category)
-
-
+                // 5. Перезагружаем данные
                 loadExpensesWithSettings()
-                Log.d("ExpenseVM_SAVE", "══════════════════════════════════════════════")
-
 
             } catch (e: Exception) {
                 Log.e("ExpenseVM_SAVE", "Ошибка сохранения", e)
             }
         }
     }
-
-
-
 
     private suspend fun calculateAndLogDetailedSums(category: String) {
         val allExpenses = db.dataExcelDao().getAllExpenses().first()
@@ -132,7 +122,6 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
         var sumNeutral = 0.0
         var sumNonEssential = 0.0
 
-        // Группируем настройки по ключу (для быстрого поиска)
         val settingsByKey = allSettings
             .filter { it.category == category }
             .associateBy { getTransactionKey(it.description) }
@@ -152,7 +141,7 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
                 ImportanceType.ESSENTIAL -> sumEssential += expense.amount
                 ImportanceType.NEUTRAL -> sumNeutral += expense.amount
                 ImportanceType.NON_ESSENTIAL -> sumNonEssential += expense.amount
-                else -> { /* нет настройки — не добавляем в сумму */ }
+                else -> { /* нет настройки */ }
             }
         }
 
@@ -163,7 +152,6 @@ class ExpenseSettingsViewModel(application: Application) : AndroidViewModel(appl
         Log.d("ExpenseVM_SAVE", "   ───────────────────────────────")
         Log.d("ExpenseVM_SAVE", "   ИТОГО по категории: ${String.format("%,.0f", sumEssential + sumNeutral + sumNonEssential)} ₽")
     }
-
 
     fun getImportanceForExpense(category: String, description: String): ImportanceType? {
         return _selectedExpenses.value["$category|||$description"]

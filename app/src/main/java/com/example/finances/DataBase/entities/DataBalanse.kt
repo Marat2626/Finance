@@ -5,8 +5,6 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "balance")
 data class Balance(
-    @PrimaryKey
-    val id: Int = 0,
-    val amount: Double,
-    val salary: Double
+    @PrimaryKey val id: Int = 1,
+    val currentBalance: Double = 0.0
 )

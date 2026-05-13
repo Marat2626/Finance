@@ -25,6 +25,13 @@ interface CategorySettingsDao {
     @Query("DELETE FROM category_settings")
     suspend fun deleteAll()
 
+
     @Query("SELECT * FROM category_settings WHERE category = :category")
     suspend fun getByCategory(category: String): CategorySettings?
+
+    @Query("DELETE FROM category_settings WHERE category = :category")
+    suspend fun deleteByCategory(category: String)
+
+    @Query("SELECT COUNT(*) FROM category_settings WHERE category = :category")
+    suspend fun getCountByCategory(category: String): Int
 }

@@ -2,22 +2,22 @@ package com.example.finances
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.util.Log
+import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,20 +27,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.finances.utils.AppColors
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
+@androidx.annotation.OptIn(ExperimentalGetImage::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
@@ -57,10 +59,9 @@ fun CameraScreen(
         )
     }
 
-    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var scannedData by remember { mutableStateOf<String?>(null) }
+    var isScanning by remember { mutableStateOf(false) }
     var cameraExecutor by remember { mutableStateOf<ExecutorService?>(null) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var recognizedText by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
     // Запрос разрешения на камеру
@@ -77,7 +78,6 @@ fun CameraScreen(
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
 
-    // Очистка ресурсов при закрытии экрана
     DisposableEffect(Unit) {
         onDispose {
             cameraExecutor?.shutdown()
@@ -87,13 +87,13 @@ fun CameraScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppColors.screenBlue)
+            .background(AppColors.current.screenBG)
     ) {
         // Верхняя панель
         TopAppBar(
             title = {
                 Text(
-                    text = "Сканировать чек",
+                    text = "Сканировать QR-код чека",
                     color = Color.White,
                     fontSize = 18.sp
                 )
@@ -108,7 +108,7 @@ fun CameraScreen(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF2A3A6A)
+                containerColor = Color.Transparent
             )
         )
 
@@ -141,7 +141,7 @@ fun CameraScreen(
                 }
             }
         } else {
-            // Предпросмотр камеры
+            // Предпросмотр камеры + сканирование QR
             Box(modifier = Modifier.fillMaxSize()) {
                 AndroidView(
                     factory = { ctx ->
@@ -151,12 +151,40 @@ fun CameraScreen(
                         cameraProviderFuture.addListener({
                             val cameraProvider = cameraProviderFuture.get()
 
+                            // Настройка превью
                             val preview = Preview.Builder().build()
                             preview.setSurfaceProvider(previewView.surfaceProvider)
 
-                            imageCapture = ImageCapture.Builder()
-                                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                            // Настройка анализа изображений (сканирование QR)
+                            val imageAnalysis = ImageAnalysis.Builder()
+                                .setTargetResolution(Size(1280, 720))
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
+
+                            val scanner = BarcodeScanning.getClient()
+
+                            imageAnalysis.setAnalyzer(cameraExecutor!!) { imageProxy ->
+                                val mediaImage = imageProxy.image
+                                if (mediaImage != null) {
+                                    val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+
+                                    scanner.process(image)
+                                        .addOnSuccessListener { barcodes ->
+                                            for (barcode in barcodes) {
+                                                val rawValue = barcode.rawValue
+                                                if (rawValue != null && barcode.valueType == Barcode.TYPE_TEXT) {
+                                                    // Нашли QR-код
+                                                    scannedData = rawValue
+                                                    isScanning = false
+                                                    showDialog = true
+                                                }
+                                            }
+                                        }
+                                        .addOnCompleteListener {
+                                            imageProxy.close()
+                                        }
+                                }
+                            }
 
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
@@ -166,7 +194,7 @@ fun CameraScreen(
                                     lifecycleOwner,
                                     cameraSelector,
                                     preview,
-                                    imageCapture
+                                    imageAnalysis
                                 )
                             } catch (e: Exception) {
                                 Log.e("Camera", "Ошибка привязки камеры", e)
@@ -178,7 +206,39 @@ fun CameraScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Кнопка съемки
+                // Рамка для наведения на QR-код
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(250.dp)
+                            .background(Color.Transparent, RoundedCornerShape(16.dp))
+                    )
+                }
+
+                // Текст-подсказка
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 150.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Text(
+                        text = "Наведите камеру на QR-код чека",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+
+                // Кнопка назад
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -186,143 +246,38 @@ fun CameraScreen(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     Button(
-                        onClick = {
-                            if (!isAnalyzing) {
-                                takePhotoAndAnalyze(
-                                    imageCapture,
-                                    cameraExecutor,
-                                    onResult = { text ->
-                                        recognizedText = text
-                                        showDialog = true
-                                    },
-                                    onStart = { isAnalyzing = true },
-                                    onFinish = { isAnalyzing = false }
-                                )
-                            }
-                        },
-                        enabled = !isAnalyzing,
-                        shape = CircleShape,
-                        modifier = Modifier
-                            .size(80.dp)
-                            .padding(16.dp),
+                        onClick = onBack,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.padding(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37))
                     ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Сфотографировать",
-                            modifier = Modifier.size(40.dp),
-                            tint = Color.Black
-                        )
-                    }
-                }
-
-                if (isAnalyzing) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(color = Color(0xFFD4AF37))
-                            Text(
-                                text = "Анализ чека...",
-                                color = Color.White,
-                                modifier = Modifier.padding(top = 16.dp)
-                            )
-                        }
+                        Text("Отмена", color = Color.Black, fontSize = 16.sp)
                     }
                 }
             }
         }
     }
 
-    // Диалог с распознанным текстом
-    if (showDialog) {
-        RecognizeReceiptDialog(
-            recognizedText = recognizedText,
+    // Диалог с данными из QR-кода
+    if (showDialog && scannedData != null) {
+        QRCodeDataDialog(
+            qrData = scannedData!!,
             onConfirm = { amount, category, description ->
                 onTransactionDetected(amount, category, description)
                 showDialog = false
                 onBack()
             },
-            onDismiss = { showDialog = false }
+            onDismiss = {
+                showDialog = false
+                scannedData = null
+            }
         )
     }
 }
 
-// Функция для очистки ресурсов
-private fun onDispose(block: () -> Unit) {
-    block()
-}
-
-private fun takePhotoAndAnalyze(
-    imageCapture: ImageCapture?,
-    cameraExecutor: ExecutorService?,
-    onResult: (String) -> Unit,
-    onStart: () -> Unit,
-    onFinish: () -> Unit
-) {
-    if (imageCapture == null || cameraExecutor == null) return
-
-    onStart()
-
-    val outputFile = File.createTempFile("receipt_", ".jpg")
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(outputFile).build()
-
-    imageCapture.takePicture(
-        outputOptions,
-        cameraExecutor,
-        object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                // Анализ изображения через ML Kit
-                analyzeImageFile(outputFile, onResult, onFinish)
-            }
-
-            override fun onError(exception: ImageCaptureException) {
-                Log.e("Camera", "Ошибка съемки", exception)
-                onFinish()
-            }
-        }
-    )
-}
-
-private fun analyzeImageFile(
-    imageFile: File,
-    onResult: (String) -> Unit,
-    onFinish: () -> Unit
-) {
-    try {
-        val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
-        val image = InputImage.fromBitmap(bitmap, 0)
-
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
-        recognizer.process(image)
-            .addOnSuccessListener { visionText ->
-                val resultText = visionText.text
-                onResult(resultText)
-                onFinish()
-                recognizer.close()
-            }
-            .addOnFailureListener { e ->
-                Log.e("OCR", "Ошибка распознавания", e)
-                onResult("")
-                onFinish()
-                recognizer.close()
-            }
-    } catch (e: Exception) {
-        Log.e("OCR", "Ошибка загрузки изображения", e)
-        onResult("")
-        onFinish()
-    }
-}
-
 @Composable
-fun RecognizeReceiptDialog(
-    recognizedText: String,
+fun QRCodeDataDialog(
+    qrData: String,
     onConfirm: (amount: Double, category: String, description: String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -330,29 +285,42 @@ fun RecognizeReceiptDialog(
     var category by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
-    // Автоматический парсинг чека
-    LaunchedEffect(recognizedText) {
-        parseReceiptText(recognizedText) { parsedAmount, parsedCategory ->
+    // Автоматический парсинг данных чека из QR-кода
+    LaunchedEffect(qrData) {
+        parseQRData(qrData) { parsedAmount, parsedCategory, parsedDescription ->
             if (parsedAmount != null) amount = parsedAmount.toString()
             if (parsedCategory != null) category = parsedCategory
+            if (parsedDescription != null) description = parsedDescription
         }
-        description = recognizedText.take(100)
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Распознанный чек", color = Color.White) },
+        title = { Text("Данные из чека", color = Color.White) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
+                Text(
+                    text = "QR-код: ${qrData.take(50)}...",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
                     label = { Text("Сумма") },
                     placeholder = { Text("0.00") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFD4AF37),
+                        unfocusedBorderColor = Color.Gray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -362,7 +330,13 @@ fun RecognizeReceiptDialog(
                     onValueChange = { category = it },
                     label = { Text("Категория") },
                     placeholder = { Text("Продукты") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFD4AF37),
+                        unfocusedBorderColor = Color.Gray
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -373,7 +347,13 @@ fun RecognizeReceiptDialog(
                     label = { Text("Описание") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(100.dp)
+                        .height(80.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFD4AF37),
+                        unfocusedBorderColor = Color.Gray
+                    )
                 )
             }
         },
@@ -386,12 +366,12 @@ fun RecognizeReceiptDialog(
                     }
                 }
             ) {
-                Text("Добавить", color = Color(0xFF6BCB6B))
+                Text("Добавить", color = Color(0xFF4CAF50))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = Color(0xFFFF6B6B))
+                Text("Отмена", color = Color(0xFFF44336))
             }
         },
         containerColor = Color(0xFF1E2F4A),
@@ -400,30 +380,44 @@ fun RecognizeReceiptDialog(
     )
 }
 
-private fun parseReceiptText(
-    text: String,
-    onResult: (amount: Double?, category: String?) -> Unit
+// Парсинг данных из QR-кода (формат чека)
+private fun parseQRData(
+    qrData: String,
+    onResult: (amount: Double?, category: String?, description: String?) -> Unit
 ) {
-    // Простой парсинг суммы (ищем числа с двумя знаками после запятой)
-    val amountPattern = Regex("""(\d+)[.,](\d{2})\s*[рР]""")
-    val match = amountPattern.find(text)
-    val amount = match?.let {
-        val rub = it.groupValues[1].toDoubleOrNull() ?: 0.0
-        val kop = it.groupValues[2].toDoubleOrNull() ?: 0.0
-        rub + kop / 100
+    // Пример формата QR-кода чека:
+    // t=20240101T120000&s=1234.56&fn=8712000100000000&i=12345&fp=9876543210&n=1
+
+    var amount: Double? = null
+    var category: String? = null
+    var description: String? = null
+
+    // Парсим сумму (s=1234.56)
+    val amountPattern = Regex("""[sS]=(\d+[.,]?\d*)""")
+    val amountMatch = amountPattern.find(qrData)
+    amount = amountMatch?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull()
+
+    // Определяем категорию по типу магазина (если есть в данных)
+    category = when {
+        qrData.contains("магнит", ignoreCase = true) -> "Магазины продуктов"
+        qrData.contains("пятёрочка", ignoreCase = true) -> "Магазины продуктов"
+        qrData.contains("аптека", ignoreCase = true) -> "Аптеки"
+        qrData.contains("азс", ignoreCase = true) -> "АЗС"
+        qrData.contains("кафе", ignoreCase = true) -> "Кафе, рестораны, фастфуд"
+        else -> "Другое"
     }
 
-    // Определение категории по ключевым словам
-    val category = when {
-        text.contains("продукт", ignoreCase = true) -> "Магазины продуктов"
-        text.contains("кафе", ignoreCase = true) -> "Кафе, рестораны, фастфуд"
-        text.contains("аптек", ignoreCase = true) -> "Аптеки"
-        text.contains("такси", ignoreCase = true) -> "Такси"
-        text.contains("супермаркет", ignoreCase = true) -> "Магазины продуктов"
-        text.contains("магнит", ignoreCase = true) -> "Магазины продуктов"
-        text.contains("пятерочка", ignoreCase = true) -> "Магазины продуктов"
-        else -> null
+    // Описание - дата + время из чека
+    val datePattern = Regex("""[tT]=(\d{4})(\d{2})(\d{2})""")
+    val dateMatch = datePattern.find(qrData)
+    if (dateMatch != null) {
+        val year = dateMatch.groupValues[1]
+        val month = dateMatch.groupValues[2]
+        val day = dateMatch.groupValues[3]
+        description = "Чек от $day.$month.$year"
+    } else {
+        description = "Покупка по чеку"
     }
 
-    onResult(amount, category)
+    onResult(amount, category, description)
 }

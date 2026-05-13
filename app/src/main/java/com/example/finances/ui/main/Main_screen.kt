@@ -1,29 +1,43 @@
 package com.example.finances
 
-import android.app.Application
+
+import android.graphics.BlurMaskFilter
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.magnifier
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.finances.utils.AppColors
-import java.time.LocalDate
+import com.example.finances.utils.cardShadow
+import org.apache.poi.sl.usermodel.Background
+import java.nio.file.WatchEvent
 
+import android.util.Log
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun mainScreen(
@@ -33,150 +47,248 @@ fun mainScreen(
     onSettingScreen: () -> Unit,
     onAI: () -> Unit
 ) {
+    val filterViewModel: FilterViewModel = viewModel()
 
 
-    val viewModelB: BalanseViewModel = viewModel()
-    val balance by viewModelB.balance.collectAsState()
+    // Состояния из FilterViewModel
+    val showFilterPanel by filterViewModel.showFilterPanel.collectAsState()
+    val selectedPeriod by filterViewModel.selectedPeriod.collectAsState()
+    val filteredTransactions by filterViewModel.filteredTransactions.collectAsState()
 
+    val expensesSum by filterViewModel.expensesSum.collectAsState()
+    val incomesSum by filterViewModel.incomesSum.collectAsState()
+    val expensesChangePercent by filterViewModel.expensesChangePercent.collectAsState()
+    val incomesChangePercent by filterViewModel.incomesChangePercent.collectAsState()
+
+
+    // Данные из базы
     val context = LocalContext.current
     val db = DataTransactions.getDatabase(context)
-    val showFilterPanel = remember { mutableStateOf(false) }
+    val transactionsFlow = db.dataExcelDao().GetAll()
+    val allTransactions by transactionsFlow.collectAsState(initial = emptyList())
 
 
     val pieCharts = PieCharts()
 
-    val app = context.applicationContext as Application
+    val viewModelB: BalanseViewModel = viewModel()
+    val balance by viewModelB.balanceFlow.collectAsState()
 
-
-    val transactionsFlow = db.dataExcelDao().GetAll()
-    val transaction by transactionsFlow.collectAsState(initial = emptyList())
-
-
-    val viewModelE: EISviewModel = viewModel(
-        key = "expenses",
-        factory = EISViewModelFactory(app, { it.getAllExpenses() }, "Расходы")
-    )
-    val viewModelI: EISviewModel = viewModel(
-        key = "incomes",
-        factory = EISViewModelFactory(app, { it.getAllIncome() }, "Зачисления")
-    )
-
-    val viewModelS: EISviewModel = viewModel(
-        key = "save",
-        factory = EISViewModelFactory(app, { it.getAllSave() }, "Накопление")
-    )
-    val getAllS by viewModelS.transactions.collectAsState()
-    val getAllE by viewModelE.transactions.collectAsState()
-    val getAllI by viewModelI.transactions.collectAsState()
-
-    var amuntE by remember { mutableStateOf(0.0) }
-    var amuntI by remember { mutableStateOf(0.0) }
-
-
-    val now = LocalDate.now()
-    val currentYear = now.year
-    val currentMonth = now.month
-
-    LaunchedEffect(getAllE, getAllI) {
-
-
-        amuntE = getAllE.filter {
-            it.date.year == currentYear && it.date.month == currentMonth
-        }.sumOf { it.amount }
-
-        amuntI = getAllI.filter {
-            it.date.year == currentYear && it.date.month == currentMonth
-        }.sumOf { it.amount }
-
+    // Передаём транзакции во ViewModel
+    LaunchedEffect(allTransactions) {
+        filterViewModel.setTransactions(allTransactions)
+    }
+    LaunchedEffect(balance) {
+        Log.d("MainScreen", "Баланс: $balance")
     }
 
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(AppColors.current.screenBG)
+    ) {
 
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppColors.screenBlue),
+
+            LazyColumn(
+                modifier = Modifier
+                    .padding(top = 40.dp)
+
+                    .fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
 
 
-        horizontalAlignment = Alignment.CenterHorizontally,
 
-        )
-    {
-        Spacer(modifier = Modifier.padding(bottom = 5.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp,),
+                item {
+
+                    if (showFilterPanel) {
+                        FilterPanel(
+                            selectedPeriod = selectedPeriod,
+                            onPeriodChange = { filterViewModel.updatePeriod(it) },
+                            onClose = { filterViewModel.toggleFilterPanel() },
+                            onReset = { filterViewModel.resetFilters() }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Column(modifier = Modifier
+                        .height(160.dp)
+                        .cardShadow()
+
+                        .padding(horizontal = 16.dp)
+                        .background(AppColors.current.cardBox, RoundedCornerShape(20.dp))
+                        .padding( 16.dp),
+                        )
+                    {
+
+                    Row(
+
+                      ) {
+                        boxStatic(
+                            text = "Расходы",
+                            amount = expensesSum,
+                            changePercent = expensesChangePercent,
+                            procentColor = if (expensesChangePercent > 15) AppColors.current.textAlfa else AppColors.current.textAlfa,
+                            color =  AppColors.current.text,
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(AppColors.current.cardBoxRed, RoundedCornerShape(20.dp))
+                                .padding(vertical = 5.dp)
+
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        boxStatic(
+                            text = "Доходы",
+                            amount = incomesSum,
+                            changePercent = incomesChangePercent,
+                            procentColor = if (incomesChangePercent < 0) AppColors.current.textAlfa else AppColors.current.textAlfa,
+                            color = AppColors.current.text,
+                            modifier = Modifier
+                                .weight(1f)
+
+                                .background(AppColors.current.cardBoxGreen, RoundedCornerShape(20.dp))
+                                .padding(vertical = 5.dp)
+                        )
+                    }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding( top = 10.dp, )
+                                .background(AppColors.current.screenBG,RoundedCornerShape(10.dp))
+                                .padding(start = 5.dp, end = 5.dp)
+                             ,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ){
+                            Text(
+                                text = "Остаток",
+                                style = TextStyle( AppColors.current.text),
+                                fontSize = 12.sp
+                            )
+
+                            Text(
+                                text = "~ ${balance.formatWithSpace()} ₽",
+                                style = TextStyle(   AppColors.current.text,),
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+
+
+                    Row(
+                        modifier = Modifier
+
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .padding(horizontal = 17.dp),
+                    ) {
+                        // Круговая диаграмма
+                        Column(
+                            modifier = Modifier
+                                .cardShadow()
+
+                                .background(
+                                    AppColors.current.cardBox,
+                                    shape = RoundedCornerShape(25.dp)
+                                )
+                                .weight(1f),
+                            verticalArrangement = Arrangement.Top,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            pieCharts.Chart(
+                                transactions = filteredTransactions,
+                                centerText = "Структура",
+                                modifier = Modifier
+                                    .size(130.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Box(
+                            modifier = Modifier.weight(1f)
+                                .cardShadow()
+                                .background(
+                                    AppColors.current.cardBox,
+                                    shape = RoundedCornerShape(25.dp)
+                                )
+                        ) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            categoryOfImportance()
+//                        YearlyIncomeTrendChart(
+//                            transactions = filteredTransactions,
+//                            modifier = Modifier.width(170.dp).height(150.dp)
+//                        )
+                        }
+                    }
+
+                        TopCategoriesChart(filteredTransactions)
+
+                    Spacer( modifier = Modifier.padding(top = 20.dp))
+
+
+            }
+
+        }
+
+
+        Row (
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Кнопка фильтра
+        ){
+
+
+                Text(
+                    text = "Главная",
+                    style = TextStyle(
+                        color = AppColors.current.text,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    modifier = Modifier.padding(start = 20.dp)
+                )
+
+
             Button(
-                onClick = { },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent
-                ),
-                contentPadding = PaddingValues(4.dp)
+                modifier = Modifier.padding(end = 20.dp),
+                onClick = { filterViewModel.toggleFilterPanel() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(5.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "⚡️",
-                        fontSize = 20.sp
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.filter),
+                        modifier = Modifier
+                            .size(23.dp),
+                        contentDescription = "Фильтер",
+                        tint = AppColors.current.text,
+
                     )
                     Text(
-                        text = "Фильтр",
+                        text = if (selectedPeriod == "Все время") "Фильтр" else selectedPeriod,
                         style = TextStyle(
-                            brush = AppColors.royalGoldGradientV,
-                            fontSize = 16.sp,
+                           color = AppColors.current.text,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         modifier = Modifier.padding(start = 4.dp)
                     )
                 }
             }
-        }
-        if (showFilterPanel.value) {
-//            FilterPanel( )
+
         }
 
 
 
-            Spacer(modifier = Modifier.padding(bottom = 5.dp))
 
-            Row(
-
-            ) {
-                box("Расходы", amuntE,)
-                Spacer(modifier = Modifier.width(15.dp))
-                box("Доходы", amuntI,)
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.Start,
-                modifier = Modifier
-                    .width(330.dp)
-                    .height(180.dp)
-            ) {
-                pieCharts.Chart(
-                    db, "План", modifier = Modifier
-                        .height(270.dp)
-                        .width(270.dp), transactionsFlow
-                )
-            }
-
-
-
-
-            Box(
-                modifier = Modifier.weight(1f) // занимает всё доступное место
-            ) {
-                // График транзакций
-                TransactionsLineChart(transaction)
-            }
-
-
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)  // вот это прижимает к низу
+        ) {
             bottomNavigationBar(
                 { onHomeClick() },
                 { onClipAddOperation() },
@@ -185,55 +297,168 @@ fun mainScreen(
                 { onAI() },
             )
         }
-
     }
+}
 
 
-    @Composable
-    fun box(text: String, amount: Double) {
+// ==================== boxStatic ====================
+@Composable
+fun boxStatic(
+    text: String,
+    amount: Double,
+    changePercent: Int,
+    procentColor: Color,
+    modifier: Modifier,
+    color: Color
+) {
+    val procentText = when {
+        changePercent > 0 -> "+$changePercent%"
+        changePercent < 0 -> "$changePercent%"
+        else -> "0%"
+    }
+    val customFont = FontFamily(
+        Font(R.font.three, FontWeight.Normal)
+    )
 
-        Box(
-            modifier = Modifier
-                .height(130.dp)
-                .width(150.dp)
-                .background(
-                    AppColors.radialBlueGradient,
-                    shape = RoundedCornerShape(17.dp)
-                )
-                .padding(vertical = 5.dp)
-        )
-        {
-            Column {
+    Box(
+        modifier = modifier
+    ) {
+        Column {
+            Text(
+                style = TextStyle(  color = AppColors.current.text,),
+                textAlign = TextAlign.Center,
+                text = text,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 10.dp, top = 5.dp)
+            )
+
+            Text(
+                color = color,
+                textAlign = TextAlign.Center,
+                fontFamily = customFont,
+                text = "${amount.formatWithSpace()} ₽",
+                fontSize = 26.sp,
+                fontWeight = FontWeight.W500,
+                modifier = Modifier.padding(start = 10.dp, )
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    style = TextStyle(AppColors.royalGoldGradientL),
+                    style = TextStyle(procentColor),
                     textAlign = TextAlign.Center,
-                    text = "$text",
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.W500,
-                    modifier = Modifier.padding(start = 10.dp, top = 10.dp)
+                    text = "$procentText",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 10.dp, top = 5.dp)
                 )
-
                 Text(
-                    style = TextStyle(AppColors.royalGoldGradientL),
-                    textAlign = TextAlign.Center,
-                    text = "₽${"%.2f".format(amount)} ",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.W500,
-                    modifier = Modifier.padding(start = 10.dp, top = 10.dp)
-                )
-
-                Text(
-                    style = TextStyle(AppColors.royalGoldGradientL),
-                    textAlign = TextAlign.Center,
-                    text = "+20%",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.W500,
-                    modifier = Modifier.padding(start = 10.dp, top = 10.dp)
+                     style = TextStyle(color =  AppColors.current.text) ,
+                    text = "к прошлому мес.",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 5.dp, top = 5.dp)
                 )
             }
         }
     }
+}
 
+
+// ==================== FilterPanel (упрощённый для главного экрана) ====================
+@Composable
+fun FilterPanel(
+    selectedPeriod: String,
+    onPeriodChange: (String) -> Unit,
+    onClose: () -> Unit,
+    onReset: () -> Unit
+) {
+    val periodOptions = listOf(
+        "Все время",
+        "Год",
+        "Текущий месяц",
+        "Прошлый месяц",
+        "Сегодня",
+        "Неделя",
+        "6 месяцев",
+    )
+
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(AppColors.current.cardBox, shape = RoundedCornerShape(25.dp))
+            .border(BorderStroke(
+                width =  1.dp,
+                color = AppColors.current.cardBox,
+
+            ),
+                shape = RoundedCornerShape(25.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+    ) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Фильтры",
+                    style = TextStyle(color = AppColors.current.text) ,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row {
+                    TextButton(onClick = onReset) {
+                        Text("Сброс", style = TextStyle(color = AppColors.current.text) , fontSize = 16.sp)
+                    }
+                    IconButton(onClick = onClose) {
+                        Text("✕",  style = TextStyle(color =  AppColors.current.text) , fontSize = 16.sp)
+                    }
+                }
+            }
+
+
+            Text(
+                "Период",
+                style = TextStyle(color =  AppColors.current.text) ,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(periodOptions) { period ->
+                    FilterChip(
+                        text = period,
+                        isSelected = selectedPeriod == period,
+                        onSelected = { onPeriodChange(period) }
+                    )
+                }
+            }
+
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+
+            Box(modifier = Modifier.background( AppColors.casesBlue, shape = RoundedCornerShape(12.dp))) {
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Применить",    style = TextStyle(AppColors.current.iconsWhite), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
 
 
 

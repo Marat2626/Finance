@@ -1,135 +1,142 @@
 package com.example.finances
 
+
+import android.graphics.Color
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.finances.utils.AppColors
 import com.github.mikephil.charting.charts.PieChart
 import com.github.mikephil.charting.components.Legend
 import com.github.mikephil.charting.data.PieData
 import com.github.mikephil.charting.data.PieDataSet
 import com.github.mikephil.charting.data.PieEntry
 import com.github.mikephil.charting.formatter.ValueFormatter
-import kotlinx.coroutines.flow.Flow
-import kotlin.collections.component1
-import kotlin.collections.component2
 
 
 class PieCharts {
 
+
     @Composable
-    fun Chart(db: DataTransactions, text: String, modifier: Modifier, transactionsFlow: Flow<List<DateExcel>>) {
-
-
-        val transactions by transactionsFlow.collectAsState(initial = emptyList())
-
-        val entriesData = remember(transactions){
-
-            transactions.groupBy { it.typeOfOperation }.map { (type, amount) ->
-                val sum = amount.sumOf { it.amount }.toFloat()
-                type to sum
-
-            }
+    fun Chart(
+        transactions: List<DateExcel>,   // ← теперь принимаем готовый список
+        centerText: String = "ИТОГ",
+        modifier: Modifier = Modifier
+    ) {
+        // Группируем по типу операции
+        val entriesData = remember(transactions) {
+            transactions
+                .groupBy { it.typeOfOperation }
+                .mapValues { (_, list) -> list.sumOf { it.amount }.toFloat() }
+                .toList()
         }
 
-        val entries = remember(entriesData) {
-            entriesData.map { (_, sum) ->
-                PieEntry(sum, "")
+        val typeDisplayNames = mapOf(
+            "Расходы" to "Потрачено",
+            "Зачисления" to "Заработано",
+            "Накопление" to "Накоплено"
+        )
+
+
+        val pieEntries = remember(entriesData) {
+            val total = entriesData.sumOf { it.second.toDouble() }.toFloat()
+            entriesData.map { (type, sum) ->
+                val displayName = typeDisplayNames[type] ?: type
+                val percent = if (total > 0) (sum / total * 100).toInt() else 0
+                PieEntry(sum, "$displayName $percent%") // «Потрачено 45%»
             }
         }
-
+        val diagramText = AppColors.current.text
+        val cardBox = AppColors.current.cardBox
         AndroidView(
             factory = { context ->
                 PieChart(context).apply {
                     description.isEnabled = false
                     isRotationEnabled = true
                     setUsePercentValues(true)
+                    setEntryLabelColor(Color.TRANSPARENT)
 
-                    legend.isEnabled = true
-                    legend.textColor = android.graphics.Color.WHITE
-                    legend.textSize = 18f
-                    legend.horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
-                    legend.verticalAlignment = Legend.LegendVerticalAlignment.CENTER
-                    legend.orientation = Legend.LegendOrientation.VERTICAL
-                    legend.xOffset = -19f
-                    legend.yOffset = -40f
-                    legend.form = Legend.LegendForm.CIRCLE
 
-                    animateY(1500)
-                    centerText = text
-                    setCenterTextSize(26f)
-                    setCenterTextColor(android.graphics.Color.WHITE)
+                    legend.apply {
+                        isEnabled = true
+
+                        // Вертикальное расположение (сверху вниз)
+                        verticalAlignment = Legend.LegendVerticalAlignment.TOP
+                        horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+                        orientation = Legend.LegendOrientation.VERTICAL
+
+                        // Отступы от краёв
+                        xOffset = 9f
+                        yOffset = 120f
+
+                        // Размер текста
+                        textSize = 12f
+                        textColor = diagramText.toArgb()
+
+
+                        // ✅ КРУГЛЫЕ ТОЧКИ ВМЕСТО КВАДРАТОВ
+                        form = Legend.LegendForm.CIRCLE
+                        formSize = 10f  // Размер кружка
+
+                        // Отступ между элементами легенды
+                        yEntrySpace = 1f
+
+                    }
 
                     setHoleRadius(60f)
-                    setHoleColor(android.graphics.Color.parseColor("#2D447E"))
+                    setHoleColor(cardBox.toArgb())
 
 
+//                    this.centerText = centerText
+//                    setCenterTextSize(26f)
+//                    setCenterTextColor(diagramText.toArgb())
+
+
+                    animateY(200)
                 }
             },
-
             update = { pieChart ->
-
-                val pieEntries = entriesData.map { (type, sum) ->
-                    PieEntry(sum, type)  // Пустая строка, чтобы не влиять на метки
+                if (pieEntries.isEmpty()) {
+                    pieChart.data = null
+                    pieChart.invalidate()
+                    return@AndroidView
                 }
-                val dataSet = PieDataSet(pieEntries,"").apply {
 
 
-                    val colorList = entriesData.map { (type, _) ->
-
+                val dataSet = PieDataSet(pieEntries, "").apply {
+                    colors = entriesData.map { (type, _) ->
                         when (type) {
-                            "Расходы" -> android.graphics.Color.parseColor("#FF6B6B")    // яркий кораллово-красный
-                            "Зачисления" -> android.graphics.Color.parseColor("#6B9CFF")  // яркий васильковый
-                            "Накопление" -> android.graphics.Color.parseColor("#6BCB6B")  // яркий травянисто-зеленый
-                            else -> android.graphics.Color.parseColor("#969696")
+                            "Расходы" -> Color.parseColor("#510F18")
+                            "Зачисления" -> Color.parseColor("#12314D")
+                            "Накопление" -> Color.parseColor("#C0933D")
+                            else -> Color.GRAY
                         }
                     }
-                    setDrawValues(true)
+                    sliceSpace = 3f
+                    setDrawValues(false)
+                }
 
-                    this.colors = colorList
-
-                    sliceSpace = 2f
+                val pieData = PieData(dataSet).apply {
+                    setValueFormatter(object : ValueFormatter() {
+                        override fun getFormattedValue(value: Float): String {
+                            return "${value.toInt()}%"
+                        }
+                    })
                 }
 
 
-                val pieData = PieData(dataSet)
-
-
-                pieData.setValueFormatter(object : ValueFormatter() {
-                    override fun getFormattedValue(value: Float): String {
-                        return "${value.toInt()} %"
-                    }
-                })
-
                 pieChart.data = pieData
-
-                pieChart.legend.isEnabled = true
                 pieChart.invalidate()
-
-
-
             },
             modifier = modifier
-
         )
 
+        Spacer(modifier = Modifier.height(60.dp))
     }
-    val colorList = listOf(
-        android.graphics.Color.rgb(255, 0, 0),      // Красный
-        android.graphics.Color.rgb(255, 255, 0),    // Желтый
-        android.graphics.Color.rgb(0, 255, 0),      // Зеленый
-        android.graphics.Color.rgb(0, 255, 128),    // Зелено-голубой
-        android.graphics.Color.rgb(0, 255, 255),    // Голубой
-        android.graphics.Color.rgb(0, 128, 255),    // Синий
-        android.graphics.Color.rgb(0, 0, 255),      // Синий чистый
-        android.graphics.Color.rgb(128, 0, 255),    // Фиолетовый
-        android.graphics.Color.rgb(255, 0, 255),    // Пурпурный
-        android.graphics.Color.rgb(255, 0, 128),    // Розово-красный
-        android.graphics.Color.rgb(255, 128, 128),  // Светло-красный
-        android.graphics.Color.rgb(255, 255, 128),  // Светло-желтый
-        android.graphics.Color.rgb(128, 255, 255)   // Светло-голубой
-    )
 }
-

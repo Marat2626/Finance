@@ -44,6 +44,8 @@ android {
 }
 
 dependencies {
+
+
     val cameraxVersion = "1.4.0"
     implementation("androidx.camera:camera-core:${cameraxVersion}")
     implementation("androidx.camera:camera-camera2:${cameraxVersion}")
@@ -77,6 +79,9 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.2.5")
 
 
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
+    
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.core.ktx)

@@ -5,15 +5,23 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.finances.Balance
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BalanceDao {
-    @Query("SELECT * FROM balance WHERE id = 1")
-    suspend fun getBalance(): Balance?
 
-    @Insert(onConflict = OnConflictStrategy.Companion.REPLACE)
-    suspend fun insertOrUpdate(balance: Balance)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveBalance(balance: Balance)
 
-    @Insert
-    suspend fun insert(database: Balance)
+    @Query("SELECT currentBalance FROM balance WHERE id = 1")
+    suspend fun getBalance(): Double?
+
+    @Query("SELECT currentBalance FROM balance WHERE id = 1")
+    fun getBalanceFlow(): Flow<Double?>
+
+    @Query("UPDATE balance SET currentBalance = :balance WHERE id = 1")
+    suspend fun updateBalance(balance: Double)
+
+    @Query("DELETE FROM balance")
+    suspend fun deleteAll()
 }

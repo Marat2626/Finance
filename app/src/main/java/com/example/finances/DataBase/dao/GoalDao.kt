@@ -16,6 +16,9 @@ interface GoalDao {
 //    @Insert
 //    suspend fun insert(dateGoal: DataGoal)
 
+    @Query("DELETE FROM DataGoal")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM DataGoal ORDER BY id DESC")
     fun getAllGoals(): Flow<List<DataGoal>>
 

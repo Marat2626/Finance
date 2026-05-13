@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DataExellDao {
+
+    @Query("DELETE FROM DateExcel")
+    suspend fun deleteAll()
     @Query("SELECT * FROM DateExcel")
     fun GetAll(): Flow<List<DateExcel>>
     @Insert
@@ -28,7 +31,30 @@ interface DataExellDao {
     @Query("SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Расходы'")
     fun getTotalExpenses(): Flow<Double?>
 
+
+
+    @Query("SELECT * FROM DateExcel WHERE typeOfOperation = 'Расходы'")
+    suspend fun getAllExpensesList(): List<DateExcel>
+
+
+
+
     @Query("SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Зачисления'")
     fun getTotalIncomes(): Flow<Double?>
+
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM DateExcel WHERE typeOfOperation = 'Зачисления'")
+    suspend fun getTotalIncomesSum(): Double
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM DateExcel WHERE typeOfOperation = 'Расходы'")
+    suspend fun getTotalExpensesSum(): Double
+    @Query("""
+        SELECT COALESCE(
+            (SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Зачисления'), 0
+        ) - COALESCE(
+            (SELECT SUM(amount) FROM DateExcel WHERE typeOfOperation = 'Расходы'), 0
+        )
+    """)
+    fun getCalculatedBalance(): Flow<Double>
 
 }

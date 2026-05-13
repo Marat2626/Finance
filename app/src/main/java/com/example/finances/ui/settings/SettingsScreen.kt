@@ -2,904 +2,778 @@ package com.example.finances
 
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.Snapshot
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.room.Database
 import com.example.finances.utils.AppColors
-import kotlinx.coroutines.delay
+import com.example.finances.utils.AppTheme
+import com.example.finances.utils.cardShadow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlin.Boolean
-import kotlin.String
-import kotlin.collections.set
+import kotlinx.coroutines.withContext
+import java.nio.file.WatchEvent
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun settingsScreen(
-    onSave: () -> Unit,
     onClipAddGoal: () -> Unit,
     onHomeClick: () -> Unit,
     onClipAddOperation: () -> Unit,
     onSettingScreen: () -> Unit,
-    onAI: () -> Unit
+    onAI: () -> Unit,
+    onSettingDetails: () -> Unit,   // ← переход на selectCategiry
 ) {
+
+    val balanceViewModel: BalanseViewModel = viewModel()
+
     val context = LocalContext.current
-    val app = context.applicationContext as Application
     val scope = rememberCoroutineScope()
-
-    var showExpenseSettings by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var expensesForCategory by remember { mutableStateOf<List<ExpenseWithImportance>>(emptyList()) } // === ViewModel для категорий расходов ===
-
-
-    val expensesViewModel: EISviewModel = viewModel(
-        key = "expenses",
-        factory = EISViewModelFactory(app, { it.getAllExpenses() }, "Расходы")
-    )
-
     val importViewModel: EISviewModel = viewModel(
         key = "import",
-        factory = EISViewModelFactory(app, { it.GetAll() }, "Импорт")
+        factory = EISViewModelFactory(
+            context.applicationContext as Application,
+            { it.GetAll() },
+            "Импорт",
+
+            )
     )
 
-    val transactions by expensesViewModel.transactions.collectAsState()
 
-    val settingsViewModel: CategorySettingsViewModel = viewModel()
-    val savedSettings by settingsViewModel.categories.collectAsState()
+    // ViewModel для получения данных
+    val expensesViewModel: EISviewModel = viewModel(
+        key = "expenses",
+        factory = EISViewModelFactory(
+            context.applicationContext as Application,
+            { it.getAllExpenses() },
+            "Расходы",
 
-    val categorySelections = remember { mutableStateMapOf<String, ImportanceType>() }
-    var isLoading by remember { mutableStateOf(true) }
-    var isImporting by remember { mutableStateOf(false) } // Состояние для индикатора импорта
+            )
+    )
+    val expenses by expensesViewModel.transactions.collectAsState()
 
+    val incomesViewModel: EISviewModel = viewModel(
+        key = "incomes",
+        factory = EISViewModelFactory(
+            context.applicationContext as Application,
+            { it.getAllIncome() },
+            "Зачисления",
+        )
+    )
+    val incomes by incomesViewModel.transactions.collectAsState()
+
+    val savingsViewModel: EISviewModel = viewModel(
+        key = "savings",
+        factory = EISViewModelFactory(
+            context.applicationContext as Application,
+            { it.getAllSave() },
+            "Накопление",
+        )
+    )
+    val savings by savingsViewModel.transactions.collectAsState()
+
+    val goalViewModel: GoalViewModel = viewModel()
+    val goals by goalViewModel.transactions.collectAsState()
+
+    val categorySettingsViewModel: CategorySettingsViewModel = viewModel()
+    val categorySettings by categorySettingsViewModel.categories.collectAsState()
 
     val expenseSettingsViewModel: ExpenseSettingsViewModel = viewModel()
+    val expenseSettings by expenseSettingsViewModel.categoriesWithExpenses.collectAsState()
 
 
-
-
-    // Загрузка
-    LaunchedEffect(Unit) {
-        settingsViewModel.loadCategories()
-    }
-    LaunchedEffect(savedSettings) {
-        categorySelections.clear()
-        savedSettings.forEach { setting ->
-            setting.importance?.let { categorySelections[setting.category] = it }
-        }
-        isLoading = false
+    // Все транзакции
+    val allTransactions = remember(expenses, incomes, savings) {
+        expenses + incomes + savings
     }
 
-    val allCategories = remember(transactions) {
-        transactions.map { it.category }.distinct().sorted()
-    }
+    var isClearing by remember { mutableStateOf(false) }
+    val databaseHelper = remember { DatabaseHelper(context) }
 
-    val categoriesWithSelection = remember(allCategories, categorySelections.toMap()) {
-        allCategories.map { category ->
-            CategoryWithSelection(
-                category = category,
-                importance = categorySelections[category],
-                count = transactions.count { it.category == category }
-            )
-        }.sortedByDescending { it.count }
-    }
+    val exportHelper = remember { ExportHelper(context) }
 
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var showSkipDialog by remember { mutableStateOf(false) }
+    var showBalanceDialog by remember { mutableStateOf(false) }
+    var inputText by remember { mutableStateOf("") }
 
-    // === Launcher для выбора файла ===
+    // Launcher для выбора Excel файла
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             scope.launch {
-                isImporting = true
                 try {
-                    // Используем существующий ViewModel для импорта
-
                     importViewModel.addTransactionsFromUri(context, it)
                     Toast.makeText(context, "Файл успешно загружен", Toast.LENGTH_SHORT).show()
-                    // Обновляем данные
-                    expensesViewModel.loadData()
                 } catch (e: Exception) {
                     Toast.makeText(context, "Ошибка загрузки: ${e.message}", Toast.LENGTH_SHORT).show()
-                } finally {
-                    isImporting = false
                 }
             }
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            filePickerLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        } else {
-            Toast.makeText(context, "Нужно разрешение для чтения файлов", Toast.LENGTH_SHORT).show()
-        }
-    }
 
 
-
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppColors.screenBlue),
-
-    ) {
-
-        Spacer(modifier = Modifier.height(15.dp))
-
-        Text(
-            text = "Финансовые настройки",
-            color = Color(0xFFD4AF37),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-        )
+    Box {
 
         LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(330.dp)
-                .padding(horizontal = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxSize()
+                .background(AppColors.current.screenBG)
         ) {
-                // === СЕКЦИЯ КАТЕГОРИИ (главная фича) ===
-                item {
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
 
+                var showClearDialog by remember { mutableStateOf(false) }
 
-                    // Список категорий с возможностью перехода к детальной настройке
-                    categoriesWithSelection.forEach { categoryWithSelection ->
-                        CategoryCardWithDetail(
-                            category = categoryWithSelection.category,
-                            count = categoryWithSelection.count,
-                            importance = categoryWithSelection.importance,
-                            onImportanceChange = { newImportance ->
-                                // Обновление на уровне категории
-                                if (categorySelections[categoryWithSelection.category] == newImportance) {
-                                    categorySelections.remove(categoryWithSelection.category)
-                                } else {
-                                    categorySelections[categoryWithSelection.category] =
-                                        newImportance
-                                }
-                            },
-                            onDetailClick = {
-                                val currentCategory =
-                                    categoryWithSelection.category   // ← сохраняем сразу
-
-                                Log.d(
-                                    "DETAIL_DEBUG",
-                                    "═══════════════════════════════════════════════════════════════"
-                                )
-                                Log.d(
-                                    "DETAIL_DEBUG",
-                                    "Открываем детальную настройку для: $currentCategory"
-                                )
-
-
-                                // 1. Загружаем все детальные настройки
-                                expenseSettingsViewModel.loadExpensesWithSettings()
-
-
-                                val allDetailed =
-                                    expenseSettingsViewModel.categoriesWithExpenses.value
-                                        .find { it.category == currentCategory }
-                                        ?.expenses ?: emptyList()
-
-                                Log.d(
-                                    "DETAIL_DEBUG",
-                                    "Загружено детальных настроек: ${allDetailed.size}"
-                                )
-
-
-                                // 3. Получаем уникальные ключи из транзакций
-                                val uniqueKeys = transactions
-                                    .filter { it.category == currentCategory }
-                                    .map { getTransactionKey(it.description) }
-                                    .distinct()
-                                    .sorted()
-
-                                uniqueKeys.forEach { key ->
-                                    Log.d("DETAIL_DEBUG", "  • '$key'")
-                                }
-
-                                Log.d(
-                                    "DETAIL_DEBUG",
-                                    "Уникальных ключей из транзакций: ${uniqueKeys.size}"
-                                )
-                                // 4. Формируем список с сохранёнными значениями
-                                expensesForCategory = uniqueKeys.map { key ->
-                                    val saved = allDetailed.find { it.description == key }
-                                    Log.d(
-                                        "DETAIL_DEBUG",
-                                        "Ключ '$key' → сохранён: ${saved?.importance ?: "НЕТ"}"
+                // Секция Данные
+                boxes(
+                    text = "Загрузка excel",
+                    text1 = "Выгрузка excel",
+                    text3 = "Очистка данных",
+                    title = "Данные и резервное копирование",
+                    iconSber = R.drawable.sber,
+                    iconExcel = R.drawable.file_type_icon,
+                    iconBasket = R.drawable.basket,
+                    filePickerLauncher = filePickerLauncher,
+                    onExportClick = {
+                        scope.launch {
+                            val success = exportHelper.exportAllData(
+                                transactions = allTransactions,
+                                goals = goals,
+                                categorySettings = categorySettings.map {
+                                    CategorySettings(
+                                        category = it.category,
+                                        importance = it.importance ?: ImportanceType.ESSENTIAL,
+                                        isUserDefined = it.isUserDefined
                                     )
-                                    ExpenseWithImportance(
-                                        description = key,
-                                        importance = saved?.importance,
-                                        isUserDefined = saved?.isUserDefined ?: false
-                                    )
-                                }
-
-
-                                // 5. Открываем экран
-                                selectedCategory = currentCategory
-                                showExpenseSettings = true
+                                },
+                                expenseSettings = expenseSettings.flatMap { category ->
+                                    category.expenses.map { expense ->
+                                        ExpenseSettings(
+                                            category = category.category,
+                                            description = expense.description,
+                                            importance = expense.importance
+                                                ?: ImportanceType.ESSENTIAL,
+                                            isUserDefined = expense.isUserDefined
+                                        )
+                                    }
+                                },
+                                balance = Balance(
+                                    currentBalance = 0.0
+                                )
+                            )
+                            if (success) {
+                                Toast.makeText(context, "Экспорт завершён", Toast.LENGTH_SHORT)
+                                    .show()
+                            } else {
+                                Toast.makeText(context, "Ошибка экспорта", Toast.LENGTH_SHORT)
+                                    .show()
                             }
+                        }
+                    },
+                    onClearClick = {
+                        scope.launch {
+                            val success = databaseHelper.clearAllData()
+                            if (success) {
+                                Toast.makeText(context, "Все данные очищены", Toast.LENGTH_SHORT)
+                                    .show()
+                                // Обновляем UI (перезагружаем данные)
 
+                            } else {
+                                Toast.makeText(context, "Ошибка очистки данных", Toast.LENGTH_SHORT)
+                                    .show()
+                            }
+                        }
 
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    },
+                )
+
+                Text(
+                    modifier = Modifier.padding(start = 30.dp, bottom = 5.dp),
+                    text = "Настройка финансов",
+                    style = TextStyle(
+                        color =  AppColors.current.text,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+
+                Card(
+                    modifier = Modifier
+                        .padding(end = 20.dp, start = 20.dp)
+                        .background(AppColors.current.cardBox, shape = RoundedCornerShape(25.dp))
+                        .height(70.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.Transparent  // ← Важно! Прозрачный контейнер
+                    ),
+
+                    ) {
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                    ) {
+
+                        settingBox(
+                            R.drawable.balanssetting,
+                            "Настроить баланс",
+                            { showBalanceDialog = true })
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (showBalanceDialog) {
+                    AlertDialog(
+                        modifier = Modifier
+                            .background(
+                                AppColors.current.cardBox,
+                                shape = RoundedCornerShape(20.dp)
+                            ),
+                        onDismissRequest = { showClearDialog = false },
+                        title = {
+                            Text(
+                                text = "ИЗМЕНИТЬ БАЛАНС",
+                                style = TextStyle(
+                                    color =  AppColors.current.text,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        },
+                        text = {
+                            Column {
+                                Text(
+                                    text = "Введите новую сумму баланса:",
+                                    style = TextStyle(
+                                        color =  AppColors.current.text,
+                                        fontSize = 14.sp
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Поле ввода
+                                TextField(
+                                    value = inputText,
+                                    onValueChange = { inputText = it },
+                                    placeholder = {
+                                        Text(
+                                            "0.00",
+                                            style = TextStyle(AppColors.current.textAlfa)
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Text(
+                                            "₽",
+                                            style = TextStyle(
+                                                AppColors.current.textAlfa,
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Medium
+                                            ),
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
+                                    },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number
+                                    ),
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color.White,
+                                        focusedIndicatorColor = Color.Black,
+                                        unfocusedIndicatorColor = Color.Black,
+                                        focusedTextColor = Color.Black,
+                                        unfocusedTextColor = Color.Black,
+                                        cursorColor = Color.Black,
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val newBalance = inputText.toDoubleOrNull() ?: 0.0
+                                    balanceViewModel.updateBalance(newBalance)
+                                    showBalanceDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFD32F2F)  // красный
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Ввести", color = Color.White)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = { showBalanceDialog = false }
+                            ) {
+                                Text(
+                                    "Отмена",
+                                    style = TextStyle(color = AppColors.current.text)
+                                )
+                            }
+                        },
+                        containerColor = Color.Transparent,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+
+                // Секция Внешний вид
+                boxesTwo(
+                    text = "Тёмная/светлая тема",
+                    text1 = "Фирменная тема",
+                    title = "Внешний вид и интерфейс",
+                    iconDartAndWhite = R.drawable.theme,
+                    iconStarMyTheme = R.drawable.heart
+                )
+            }
         }
 
-        // === ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ ===
-            importingStatements(
-                permissionLauncher,
-                filePickerLauncher,
-                isImporting
-            )
-
-        Spacer(modifier = Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .align(Alignment.BottomCenter)  // вот это прижимает к низу
         ) {
-            Button(
-                onClick = {
-                    val allSelected = allCategories.all { categorySelections.containsKey(it) }
-                    if (allSelected) {
-                        showSaveDialog = true
-                    } else {
-                        showSkipDialog = true
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD4AF37)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "Сохранить настройки категорий",
-                    color = Color(0xFF1E2F4A),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
-        }
-
-        bottomNavigationBar(
-            { onHomeClick() },
-            { onClipAddOperation() },
-            { onClipAddGoal() },
-            { onSettingScreen() },
-            { onAI() },
-        )
-    }
-
-    // ====================== ДИАЛОГИ СОХРАНЕНИЯ ======================
-    if (showSaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showSaveDialog = false },
-            title = { Text("Сохранить настройки?", color = Color.White) },
-            text = { Text("Настройки будут использоваться для расчёта стратегий накопления", color = Color.White.copy(alpha = 0.7f)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            settingsViewModel.saveSelectedCategories(categorySelections)
-                            showSaveDialog = false
-                            onSave()           // ← твой callback
-                        }
-                    }
-                ) { Text("Сохранить", color = Color(0xFF6BCB6B)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) {
-                    Text("Отмена", color = Color(0xFFFF6B6B))
-                }
-            },
-            containerColor = Color(0xFF1E2F4A)
-        )
-    }
-
-
-    if (showSkipDialog) {
-        val unselectedCount = allCategories.count { !categorySelections.containsKey(it) }
-        AlertDialog(
-            onDismissRequest = { showSkipDialog = false },
-            title = { Text("Не все категории отмечены", color = Color.White) },
-            text = {
-                Column {
-                    Text("Вы не выбрали важность для $unselectedCount категорий.", color = Color.White.copy(alpha = 0.7f))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Сохранить только отмеченные?", color = Color.White.copy(alpha = 0.7f))
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            settingsViewModel.saveSelectedCategories(categorySelections)
-                            showSkipDialog = false
-                            onSave()
-                        }
-                    }
-                ) { Text("Сохранить отмеченные", color = Color(0xFF6BCB6B)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSkipDialog = false }) {
-                    Text("Вернуться", color = Color(0xFFFF6B6B))
-                }
-            },
-            containerColor = Color(0xFF1E2F4A)
-        )
-    }
-
-
-    // Детальный экран (оставляем как есть)
-    if (showExpenseSettings && selectedCategory != null) {
-        ExpenseSettingsScreen(
-            category = selectedCategory!!,
-            onBack = {
-                showExpenseSettings = false
-                selectedCategory = null
-            }
-        )
-    }
-
-}
-
-@Composable
-fun selectCategory(
-    allCategories: List<String>,
-    transactions: List<DateExcel>,
-    isLoading: Boolean,
-    categoriesWithSelection: List<CategoryWithSelection>,
-    categorySelections: SnapshotStateMap<String, ImportanceType>,
-    showSaveDialog:() -> Unit,
-    showSkipDialog: () -> Unit
-
-
-
-    ){
-
-    Text(
-        text = "Финансовые настройки",
-        color = Color(0xFFD4AF37),
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-    )
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A3A6A)),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier  .height(250.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Категории расходов", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "${allCategories.size} категорий • ${transactions.size} операций",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 14.sp
-                    )
-                }
-                Button(
-                    onClick = {
-                        val allSelected = allCategories.all { categorySelections.containsKey(it) }
-                        if (allSelected) showSaveDialog() else showSkipDialog()
-                    },
-                    modifier = Modifier
-                        .width(70.dp)
-                        .height(46.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
-                    shape = RoundedCornerShape(16.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text = "Сохранить",
-                        color = Color(0xFF1E2F4A),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (isLoading) {
-                CircularProgressIndicator(color = Color(0xFFD4AF37), modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.height(420.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(categoriesWithSelection) { item ->
-                        CategoryCard(
-                            category = item.category,
-                            count = item.count,
-                            importance = item.importance,
-                            onImportanceChange = { newImportance ->
-                                if (categorySelections[item.category] == newImportance) {
-                                    categorySelections.remove(item.category)
-                                } else {
-                                    categorySelections[item.category] = newImportance
-                                }
-                            }
-                        )
-                    }
-                }
-            }
+            bottomNavigationBar(
+                { onHomeClick() },
+                { onClipAddOperation() },
+                { onClipAddGoal() },
+                { onSettingScreen() },
+                { onAI() }
+            )
         }
     }
-
-
 }
-@Composable
-fun user(){
 
-    Column(
+
+
+@Composable
+fun settingsBox(text: String,  iconRes: Int, onClick: () -> Unit, color: Color ){
+
+    Row(
         modifier = Modifier
-            .width(356.dp)
-            .height(200.dp)
-            .background(Color(0xFF2A3A6A),
-                shape = RoundedCornerShape(16.dp)),
+            .clickable{ onClick() }
+            .fillMaxWidth().height(60.dp)
+            .padding(top = 15.dp, start = 10.dp),
 
-    ){
+
+        ) {
+
+        Icon(
+            painter = painterResource(id = iconRes),
+            modifier = Modifier
+                .size(26.dp),
+            contentDescription = "Excel",
+            tint = color
+        )
+
+        Text(
+            modifier = Modifier.padding(start = 10.dp,top = 5.dp),
+            text = text,
+            style = TextStyle(
+                color = AppColors.current.text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+        )
 
     }
+    Divider(
+        modifier = Modifier
 
-}
-@Composable
-fun importingStatements(
-    permissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
-    filePickerLauncher:ManagedActivityResultLauncher<String, Uri?>,
-    isImporting: Boolean){
-    Text(
-        text = "Дополнительно",
-        color = Color(0xFFD4AF37),
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
+            .width(300.dp)
+            .padding(start = 25.dp)
+            .background(AppColors.current.text),
+
+        thickness = 1.dp
     )
+}
 
-    // Обновленный SettingsItem с выбором файла
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A3A6A)),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
+
+@Composable
+fun boxes(
+    text: String,
+    text1: String,
+    text3: String,
+    title: String,
+    iconSber: Int,
+    iconExcel: Int,
+    iconBasket: Int,
+    filePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,   // только этот нужен
+    onExportClick: () -> Unit,
+    onClearClick: () -> Unit,
+) {
+
+
+    Column(modifier = Modifier
+
+        .padding(20.dp)) {
+
+
+        Text(
+            modifier = Modifier.padding(start = 10.dp, bottom = 5.dp),
+            text = title,
+            style = TextStyle(
+                color = AppColors.current.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+        )
+
+        var showClearDialog by remember { mutableStateOf(false) }
+
+
+        Column(
+
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    // Проверяем версию Android и запрашиваем разрешения
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        // Android 13+
-                        permissionLauncher.launch(android.Manifest.permission.READ_MEDIA_IMAGES)
-                    } else if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.Q) {
-                        // Android 10 и ниже
-                        permissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                    } else {
-                        // Android 11-12 - не требуют разрешений
-                        filePickerLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    }
-                }
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .height(180.dp)
+                .background(AppColors.current.cardBox,
+                    RoundedCornerShape(25.dp),
+                )
+
+
         ) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFFD4AF37), modifier = Modifier.size(28.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Импорт банковской выписки",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+            Column(modifier = Modifier.fillMaxSize()) {
+
+
+
+
+
+
+                // Загрузка Excel
+                settingsBox(
+                    text = text,
+                    iconRes = iconSber,
+                    onClick = {
+                        filePickerLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+                    },
+                    color = Color.Unspecified
                 )
-                Text(
-                    "Загрузить Excel из памяти телефона",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 13.sp
+
+
+                // Выгрузка Excel (пока заглушка)
+                settingsBox(
+                    text1,
+                    iconExcel,
+                    onClick = {
+                        onExportClick()
+                    },
+                    color = Color.Unspecified
+                )
+
+
+                settingsBox(
+                    text3,
+                    iconBasket,
+                    onClick = { showClearDialog = true },
+                    color = AppColors.current.icones
+                )
+
+
+            }
+
+            if (showClearDialog) {
+                AlertDialog(
+                    modifier = Modifier
+                        .background(AppColors.current.cardBox, shape = RoundedCornerShape(20.dp)),
+                    onDismissRequest = { showClearDialog = false },
+                    title = {
+                        Text(
+                            text = "⚠️ Очистка данных",
+                            style = TextStyle(
+                                color = AppColors.current.text,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Вы уверены, что хотите удалить ВСЕ данные?\n\n" +
+                                    "Будут удалены:\n" +
+                                    "• Все транзакции\n" +
+                                    "• Все цели\n" +
+                                    "• Настройки категорий\n\n" +
+                                    "Это действие нельзя отменить!",
+                            style = TextStyle(
+                                color =  AppColors.current.text,
+                                fontSize = 16.sp
+                            )
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                onClearClick()  // ← выполняем очистку
+                                showClearDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD32F2F)  // красный
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Удалить всё", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showClearDialog = false }
+                        ) {
+                            Text(
+                                "Отмена",
+                                style = TextStyle(color = AppColors.current.icones)
+                            )
+                        }
+                    },
+                    containerColor = Color.Transparent,
+                    shape = RoundedCornerShape(16.dp)
                 )
             }
-            if (isImporting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = Color(0xFFD4AF37),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(Icons.Default.AccountBox, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
-            }
+
+
+
+
+
         }
     }
 }
 
-@Composable
-fun CategoryCardWithDetail(
-    category: String,
-    count: Int,
-    importance: ImportanceType?,
-    onImportanceChange: (ImportanceType) -> Unit,
-    onDetailClick: () -> Unit
-) {
 
-    Spacer(modifier = Modifier.height(16.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth().height(100.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A3A6A)),
-        shape = RoundedCornerShape(12.dp),
-        onClick =  onDetailClick
+// Первый переключатель: Темная/Светлая тема
+@Composable
+fun themeSwitch() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
+        horizontalArrangement = Arrangement.End
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = category,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-                Text("$count раз", color = Color(0xFFD4AF37).copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ImportanceChip("Обязательные", "🏠", importance == ImportanceType.ESSENTIAL, Color(0xFF6BCB6B), { onImportanceChange(ImportanceType.ESSENTIAL) }, Modifier.weight(1f))
-                ImportanceChip("Нейтральные", "⚖️", importance == ImportanceType.NEUTRAL, Color(0xFF6B9CFF), { onImportanceChange(ImportanceType.NEUTRAL) }, Modifier.weight(1f))
-                ImportanceChip("Необязательные", "🎯", importance == ImportanceType.NON_ESSENTIAL, Color(0xFFFF6B6B), { onImportanceChange(ImportanceType.NON_ESSENTIAL) }, Modifier.weight(1f))
-            }
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (importance == null) {
-                Text("⚠️ Важность не выбрана", color = Color(0xFFFF6B6B), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-            }
-        }
+        Switch(
+            checked = AppColors.currentTheme == AppTheme.LIGHT,
+            onCheckedChange = {
+                AppColors.toggleDarkLight()
+            },
+            enabled = !AppColors.isFavouriteTheme,  // отключаем, если включена фирменная
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF262626),
+                checkedTrackColor = Color(0x9A414040).copy(alpha = 0.5f),
+                uncheckedThumbColor = Color(0xFF4C67A7),
+                uncheckedTrackColor = Color(0xFF4C67A7).copy(alpha = 0.5f)
+            )
+        )
     }
 }
 
 @Composable
-fun CategoryCard(
-    category: String,
-    count: Int,
-    importance: ImportanceType?,
-    onImportanceChange: (ImportanceType) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A3A6A)),
-        shape = RoundedCornerShape(12.dp)
+fun favouriteThemeSwitch() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
+        horizontalArrangement = Arrangement.End
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(category, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Text("$count раз", color = Color(0xFFD4AF37).copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ImportanceChip("Обязательные", "🏠", importance == ImportanceType.ESSENTIAL, Color(0xFF6BCB6B), { onImportanceChange(ImportanceType.ESSENTIAL) }, Modifier.weight(1f))
-                ImportanceChip("Нейтральные", "⚖️", importance == ImportanceType.NEUTRAL, Color(0xFF6B9CFF), { onImportanceChange(ImportanceType.NEUTRAL) }, Modifier.weight(1f))
-                ImportanceChip("Необязательные", "🎯", importance == ImportanceType.NON_ESSENTIAL, Color(0xFFFF6B6B), { onImportanceChange(ImportanceType.NON_ESSENTIAL) }, Modifier.weight(1f))
-            }
-
-
-            if (importance == null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("⚠️ Важность не выбрана", color = Color(0xFFFF6B6B), fontSize = 10.sp)
-            }
-        }
+        Switch(
+            checked = AppColors.isFavouriteTheme,
+            onCheckedChange = {
+                AppColors.toggleFavourite()
+            },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF2196F3),
+                checkedTrackColor = Color(0xFF2196F3).copy(alpha = 0.5f),
+                uncheckedThumbColor = Color(0xFF4C67A7),
+                uncheckedTrackColor = Color(0xFF4C67A7).copy(alpha = 0.5f)
+            )
+        )
     }
 }
 
 
 @Composable
-fun ImportanceChip(
+fun settingBox(icons: Int, text: String, onClick:() -> Unit) {
+
+
+    Row (
+        modifier = Modifier
+
+            .background(AppColors.current.cardBox, shape = RoundedCornerShape(25.dp))
+            .height(70.dp)
+            .clickable{ onClick() }
+            .padding(start = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Icon(
+            painter = painterResource(id = icons),
+            modifier = Modifier
+                .size(26.dp),
+            contentDescription = "Excel",
+            tint = AppColors.current.icones
+
+        )
+
+        Text(
+            modifier = Modifier.padding(start = 10.dp,top = 5.dp),
+            text = text,
+            style = TextStyle(
+                color = AppColors.current.text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+        )
+    }
+    Divider(
+        modifier = Modifier
+            .width(300.dp)
+            .padding(start = 25.dp)
+            .background(AppColors.current.text),
+
+        thickness = 1.dp
+    )
+
+}
+@Composable
+fun settingsBoxTwo(text: String,  iconRes: Int,isThemeSwitch: Boolean = false, isFavouriteSwitch: Boolean = false, color: Color){
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth().height(60.dp)
+            .padding(bottom = 5.dp, start = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+
+        ) {
+
+        Icon(
+            painter = painterResource(id = iconRes),
+            modifier = Modifier
+                .size(26.dp),
+            contentDescription = "Excel",
+            tint = color
+
+        )
+
+        Text(
+            modifier = Modifier.padding(start = 10.dp,top = 5.dp),
+            text = text,
+            style = TextStyle(
+                color = AppColors.current.text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+        )
+
+        when {
+            isThemeSwitch -> themeSwitch()
+            isFavouriteSwitch -> favouriteThemeSwitch()
+            else -> Spacer(modifier = Modifier)
+        }
+
+
+    }
+    Divider(
+        modifier = Modifier
+            .width(300.dp)
+            .padding(start = 25.dp)
+            .background(AppColors.current.text),
+
+        thickness = 1.dp
+    )
+}
+@Composable
+fun boxesTwo(
     text: String,
-    icon: String,
-    isSelected: Boolean,
-    color: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    text1: String,
+    title: String,
+    iconDartAndWhite: Int,
+    iconStarMyTheme: Int,
 ) {
-
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) color else Color(0xFF1E2F4A),
-            contentColor = if (isSelected) Color.Black else Color.White
-        ),
-        shape = RoundedCornerShape(8.dp),
-        border = if (!isSelected) BorderStroke(1.dp, Color(0xFF4C67A7)) else null
-    ) {
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(icon, fontSize = 14.sp)
-            Spacer(Modifier.width(4.dp))
-            Text(text, fontSize = 11.sp, maxLines = 1)
-        }
-    }
-}
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ExpenseSettingsScreen(
-    category: String,
-    onBack: () -> Unit
-) {
-    val expenseVM: ExpenseSettingsViewModel = viewModel()
-    val categoriesWithExpenses by expenseVM.categoriesWithExpenses.collectAsState()
-    val selections = remember { mutableStateMapOf<String, ImportanceType>() }
-    val context = LocalContext.current
-
-
-    // Загружаем самые свежие данные каждый раз при открытии
-    LaunchedEffect(category) {
-        expenseVM.loadExpensesWithSettings()
-    }
-
-
-    val currentCategoryExpenses = categoriesWithExpenses
-        .find { it.category == category }
-        ?.expenses ?: emptyList()
-
-
-    // Инициализация выбранных значений (детальные настройки имеют приоритет)
-    LaunchedEffect(currentCategoryExpenses) {
-        selections.clear()
-        currentCategoryExpenses.forEach { exp ->
-            exp.importance?.let {
-                selections["$category|||${exp.description}"] = it
-            }
-        }
-    }
-
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(AppColors.screenBlue)
+
+            .padding(end = 20.dp, start = 20.dp)
+            .height(150.dp),
+        verticalArrangement = Arrangement.Center
     ) {
-        TopAppBar(
-            title = { Text("Настройка: $category", color = Color.White) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, tint = Color.White, contentDescription = "Назад")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2A3A6A))
-        )
 
 
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(currentCategoryExpenses) { expense ->
-                ExpenseSettingCard(
-                    description = expense.description,
-                    importance = selections["$category|||${expense.description}"],
-                    onImportanceChange = { newImportance ->
-                        val key = "$category|||${expense.description}"
-                        if (selections[key] == newImportance) {
-                            selections.remove(key)
-                        } else {
-                            selections[key] = newImportance
-                        }
-                    }
-                )
-            }
-            item { Spacer(modifier = Modifier.height(100.dp)) }
-        }
-
-
-        // Кнопка сохранения внизу (всегда видна)
-        Surface(
-            color = Color(0xFF2A3A6A),
-            tonalElevation = 8.dp
-        ) {
-            Column {
-                Button(
-                    onClick = {
-                        if (selections.isEmpty()) {
-                            Toast.makeText(context, "Выберите важность хотя бы для одной траты", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-
-                        // Сохраняем
-                        expenseVM.saveSelectedExpenses(selections.toMap())
-
-
-                        // Безопасное форматирование для Toast (если хочешь показать сумму)
-                        val totalSelected = selections.size
-                        Toast.makeText(
-                            context,
-                            "✅ Сохранено $totalSelected описаний",
-                            Toast.LENGTH_SHORT
-                        ).show()
-
-
-                        onBack()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        "Сохранить настройки трат",
-                        color = Color(0xFF1E2F4A),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-
-
-
-                // Дополнительная кнопка — быстро применить настройку категории ко всем тратам
-                TextButton(
-                    onClick = { /* позже добавим логику */ },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                ) {
-                    Text("Применить настройку категории ко всем тратам", color = Color(0xFFD4AF37))
-                }
-            }
-        }
-    }
-}
-
-
-
-
-
-
-
-@Composable
-fun ExpenseSettingCard(
-    description: String,
-    importance: ImportanceType?,
-    onImportanceChange: (ImportanceType) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A3A6A)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(
-                text = description,
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2
+        Text(
+            modifier = Modifier.padding(start = 10.dp, bottom = 10.dp),
+            text = title,
+            style = TextStyle(
+                color =  AppColors.current.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
             )
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(AppColors.current.cardBox,
+                    RoundedCornerShape(23.dp),
+                ),
+            verticalArrangement = Arrangement.Center
+        ) {
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ImportanceChip(
-                    "Обязательные", "🏠",
-                    importance == ImportanceType.ESSENTIAL,
-                    Color(0xFF6BCB6B),
-                    { onImportanceChange(ImportanceType.ESSENTIAL) },
-                    Modifier.weight(1f)
-                )
-                ImportanceChip(
-                    "Нейтральные", "⚖️",
-                    importance == ImportanceType.NEUTRAL,
-                    Color(0xFF6B9CFF),
-                    { onImportanceChange(ImportanceType.NEUTRAL) },
-                    Modifier.weight(1f)
-                )
-                ImportanceChip(
-                    "Необязательные", "🎯",
-                    importance == ImportanceType.NON_ESSENTIAL,
-                    Color(0xFFFF6B6B),
-                    { onImportanceChange(ImportanceType.NON_ESSENTIAL) },
-                    Modifier.weight(1f)
-                )
-            }
+            settingsBoxTwo(text, iconDartAndWhite, isThemeSwitch = true, color = Color.Unspecified)
+            // Переключатель Фирменная синяя тема
+            settingsBoxTwo(text1, iconStarMyTheme, isFavouriteSwitch = true, color = AppColors.current.icones)
         }
+
     }
+
 }
-fun getTransactionKey(description: String): String {
-    // Убираем лишние пробелы в начале и конце
-    val trimmed = description.trim()
 
-    // Ищем первый пробел или дефис
-    val spaceIndex = trimmed.indexOf(' ')
-    val dashIndex = trimmed.indexOf('-')
 
-    // Берем минимальный индекс (какой встретился раньше)
-    val separatorIndex = when {
-        spaceIndex >= 0 && dashIndex >= 0 -> minOf(spaceIndex, dashIndex)
-        spaceIndex >= 0 -> spaceIndex
-        dashIndex >= 0 -> dashIndex
-        else -> trimmed.length
-    }
 
-    // Если разделитель найден — берем часть до него, иначе всё описание
-    return if (separatorIndex < trimmed.length) {
-        trimmed.substring(0, separatorIndex)
-    } else {
-        trimmed
-    }
-}
+
+
+
 data class CategoryWithSelection(
     val category: String,
     val importance: ImportanceType?,
     val count: Int
 )
-data class ExpenseWithImportance(
-    val description: String,
-    val importance: ImportanceType? = null,
-    val isUserDefined: Boolean = false
-)
+class DatabaseHelper(private val context: Context) {
+
+    suspend fun clearAllData(): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val db = DataTransactions.getDatabase(context)
+
+            // Очищаем все таблицы
+            db.dataExcelDao().deleteAll()
+            db.goalDao().deleteAll()
+            db.categorySettingsDao().deleteAll()
+            db.expenseSettingsDao().deleteAll()
+            db.balanceDao().deleteAll()
+
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+}

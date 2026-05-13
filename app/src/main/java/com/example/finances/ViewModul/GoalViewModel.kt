@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -39,14 +40,14 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
         name: String,
         amount: Double?,
         savedAmount: Double = 0.0,
-        monthsCount: Int ,
+        monthsCount: Int,
         monthlyPayment: Double = 0.0,
-        createdAt: LocalDateTime = LocalDateTime.now()){
-
+        createdAt: LocalDateTime = LocalDateTime.now()
+    ) {
         viewModelScope.launch {
-
             try {
                 val existingGoal = db.goalDao().getNameGoal(name)
+                var goalId: Int
 
                 if (existingGoal == null) {
                     val dataGoal = DataGoal(
@@ -56,30 +57,37 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
                         monthsCount = monthsCount,
                         monthlyPayment = monthlyPayment,
                         createdDate = createdAt
-
                     )
-                    val insertedId = db.goalDao().insert(dataGoal)
-                    lastCreatedGoalId = insertedId.toInt() // сохраняем ID
+                    goalId = db.goalDao().insert(dataGoal).toInt()
+                    lastCreatedGoalId = goalId
                     Log.d("GoalVM", "=== NEW GOAL CREATED ===")
-                    Log.d("GoalVM", "Name: $name")
-                    Log.d("GoalVM", "Generated ID: $lastCreatedGoalId")
-                }
-                else {
+                    Log.d("GoalVM", "Name: $name, ID: $goalId")
+                } else {
                     val updateGoal = existingGoal.copy(
                         savedAmount = existingGoal.savedAmount + savedAmount
                     )
-
                     db.goalDao().insertOrUpdate(updateGoal)
-                    lastCreatedGoalId = existingGoal.id
+                    goalId = existingGoal.id
+                    lastCreatedGoalId = goalId
                     Log.d("GoalVM", "=== GOAL UPDATED ===")
-                    Log.d("GoalVM", "Name: $name")
-                    Log.d("GoalVM", "ID: $lastCreatedGoalId")
+                    Log.d("GoalVM", "Name: $name, ID: $goalId")
                 }
+
+                if (monthlyPayment > 0) {
+                    val planSettings = PlanSettings(
+                        category = "goal_$goalId",  // ← вернуть goal_id
+                        importance = ImportanceType.ESSENTIAL,
+                        plannedAmount = monthlyPayment,
+                        isDetailed = false
+                    )
+                    db.planSettingsDao().insertAll(listOf(planSettings))
+                    Log.d("GoalVM", "✅ Цель добавлена в план: goal_$goalId = $monthlyPayment ₽")
+                }
+
                 loadGoalsFromDb()
-            }catch (e: Exception) {
+            } catch (e: Exception) {
                 Log.e("Goal", "Ошибка загрузки Goal", e)
             }
-
         }
     }
     fun getLastCreatedGoalId(): Int {
@@ -108,30 +116,16 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
         }
     }
 
-    fun deleteGoal(goal: DataGoal){
+    fun deleteGoal(goal: DataGoal) {
         viewModelScope.launch {
+            val allPlans = db.planSettingsDao().getAll().first()
+            val remaining = allPlans.filter { it.category != "goal_${goal.id}" }
+            db.planSettingsDao().deleteAll()
+            if (remaining.isNotEmpty()) {
+                db.planSettingsDao().insertAll(remaining)
+            }
             db.goalDao().deleteGoal(goal)
-            Log.d("GoalVM", "Цель '$goal' удалена ")
-
         }
     }
-
-    fun calculateMonthlySavings(goal: DataGoal): Double {
-        // Проверяем, что цель существует и у нее есть сумма
-        if (goal.amount == null || goal.amount <= 0) return 0.0
-
-        // Проверяем, что указан срок
-        if (goal.monthsCount <= 0) return 0.0
-
-        // Сколько осталось накопить
-        val remainingAmount = goal.amount - goal.savedAmount
-
-        // Если уже накопили или перевыполнили план
-        if (remainingAmount <= 0) return 0.0
-
-        // Ежемесячный платеж
-        return remainingAmount / goal.monthsCount
-    }
-
 
 }

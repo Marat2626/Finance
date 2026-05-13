@@ -12,6 +12,11 @@ interface ExpenseSettingsDao {
     @Query("SELECT * FROM expense_settings ORDER BY category, description")
     fun getAllSettings(): Flow<List<ExpenseSettings>>
 
+
+    @Query("DELETE FROM expense_settings WHERE category = :category AND description = :description")
+    suspend fun deleteByCategoryAndDescription(category: String, description: String)
+
+
     @Query("SELECT * FROM expense_settings WHERE category = :category")
     fun getByCategory(category: String): Flow<List<ExpenseSettings>>
 
