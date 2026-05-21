@@ -16,7 +16,9 @@ interface ExpenseSettingsDao {
     @Query("DELETE FROM expense_settings WHERE category = :category AND description = :description")
     suspend fun deleteByCategoryAndDescription(category: String, description: String)
 
-
+    // В ExpenseSettingsDao.kt добавьте:
+    @Query("SELECT * FROM expense_settings")
+    suspend fun getAllSync(): List<ExpenseSettings>
     @Query("SELECT * FROM expense_settings WHERE category = :category")
     fun getByCategory(category: String): Flow<List<ExpenseSettings>>
 

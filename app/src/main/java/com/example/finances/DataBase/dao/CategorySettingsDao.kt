@@ -25,7 +25,9 @@ interface CategorySettingsDao {
     @Query("DELETE FROM category_settings")
     suspend fun deleteAll()
 
-
+    // В CategorySettingsDao.kt добавьте:
+    @Query("SELECT * FROM category_settings")
+    suspend fun getAllSync(): List<CategorySettings>
     @Query("SELECT * FROM category_settings WHERE category = :category")
     suspend fun getByCategory(category: String): CategorySettings?
 

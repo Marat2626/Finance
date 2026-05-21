@@ -112,14 +112,16 @@ fun GoalDetailScreen(
     }
     val db = DataTransactions.getDatabase(context)
 
-    val predictor = remember { goalProgressPredictor(db) }  // db из DataTransactions
+    val predictor1 = remember { goalProgressPredictor(db) }  // db из DataTransactions
+    val predictor = remember { MlGoalPredictor(context) }
 
+    var prediction1 by remember { mutableStateOf<goalProgressPredictor.PredictionResult?>(null) }
 
-    var prediction by remember { mutableStateOf<goalProgressPredictor.PredictionResult?>(null) }
+    var prediction by remember { mutableStateOf<MlGoalPredictor.MlPredictionResult?>(null) }
 
     LaunchedEffect(currentGoal) {
         if (currentGoal != null) {
-            prediction = predictor.predict(currentGoal)
+            prediction = predictor.predict(db, currentGoal)
         } else {
             prediction = null
         }
@@ -318,17 +320,19 @@ fun GoalDetailScreen(
         }
 
 
+        val pendingGoalName = remember { mutableStateOf("") }
+        val pendingGoalAmount = remember { mutableStateOf<Double?>(null) }
+        val pendingCategory = remember { mutableStateOf("") }  // ← новое
+
+
         if (showAddGoalSheet) {
             Log.d("GOAL_DEBUG", "Показываем addGoal, showAddGoalSheet = $showAddGoalSheet")
             addGoal(
-                showAddGoalSheet = { newState ->
-                    Log.d("GOAL_DEBUG", "addGoal закрыт, newState = $newState")
-                    showAddGoalSheet = newState
-                },
-                onGoalCreated = { name, amount ->
-                    Log.d("GOAL_DEBUG", "onGoalCreated: $name, $amount")
+                showAddGoalSheet = { newState -> showAddGoalSheet = newState },
+                onGoalCreated = { name, amount, category ->  // ← добавил category
                     pendingGoalName.value = name
                     pendingGoalAmount.value = amount
+                    pendingCategory.value = category  // ← сохраняем категорию
                     showStrategySheet.value = true
                 }
             )
@@ -336,15 +340,17 @@ fun GoalDetailScreen(
         if (showStrategySheet.value) {
             GoalStrategySelector(
                 goalAmount = pendingGoalAmount.value!!,
+                category = pendingCategory.value,
                 onDismiss = { showStrategySheet.value = false },
                 onStrategySelected = { rec ->
                     viewModelG.saveGoal(
                         name = pendingGoalName.value,
-                        amount = pendingGoalAmount.value,
+                        amount = rec.goalAmount,  // ← используем сумму из ML
                         savedAmount = 0.0,
                         monthsCount = rec.months,
                         monthlyPayment = rec.monthlyPayment,
-                        createdAt = LocalDateTime.now()
+                        createdAt = LocalDateTime.now(),
+                        category = pendingCategory.value
                     )
                     showStrategySheet.value = false
                 },
@@ -1330,7 +1336,8 @@ fun GoalGrowthChart(
 
 @Composable
 fun PredictionCard(
-    prediction: goalProgressPredictor.PredictionResult,
+    prediction: MlGoalPredictor.MlPredictionResult,
+//    prediction: goalProgressPredictor.PredictionResult,
     goals: List<DataGoal>
 ) {
 

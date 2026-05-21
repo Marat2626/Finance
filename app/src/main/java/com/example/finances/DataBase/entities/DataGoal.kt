@@ -19,5 +19,6 @@ data class DataGoal (
     var savedAmount: Double = 0.0,
     val monthsCount: Int,
     val monthlyPayment: Double = 0.0,
-    val createdDate: LocalDateTime = LocalDateTime.now()
+    val createdDate: LocalDateTime = LocalDateTime.now(),
+    val category: String = ""
 )

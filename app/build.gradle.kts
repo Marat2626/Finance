@@ -1,8 +1,14 @@
+
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+
     id("kotlin-kapt")
+
+//    id("com.chaquo.python") version "15.0.1"
+
 
 }
 
@@ -19,6 +25,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+//        ndk {
+//            abiFilters += listOf("arm64-v8a", "x86_64")
+//        }
+//
 
     }
 
@@ -45,6 +55,8 @@ android {
 
 dependencies {
 
+
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.0")
 
     val cameraxVersion = "1.4.0"
     implementation("androidx.camera:camera-core:${cameraxVersion}")
@@ -106,3 +118,4 @@ dependencies {
 
 
 }
+

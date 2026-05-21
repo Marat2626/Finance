@@ -4,6 +4,7 @@ package com.example.finances
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -352,7 +353,16 @@ fun settingsScreen(
                     iconDartAndWhite = R.drawable.theme,
                     iconStarMyTheme = R.drawable.heart
                 )
+
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+
+
+
+
             }
+
         }
 
         Box(

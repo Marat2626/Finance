@@ -308,5 +308,6 @@ data class StrategyRecommendation(
     val months: Int,
     val monthlyPayment: Double,
     val id: Int,
-    val description: String
+    val description: String,
+    val goalAmount: Double = 0.0
 )

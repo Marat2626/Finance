@@ -156,7 +156,7 @@ fun ExpenseSettingsScreen(
         ) {
             Text(
                 text = "Сохранить настройки трат",
-                fontSize = 25.sp,
+                fontSize = 20.sp,
                 style = TextStyle(AppColors.current.text),
                 fontWeight = FontWeight.Bold,
 

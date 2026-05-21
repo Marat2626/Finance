@@ -315,7 +315,7 @@ class MainActivity : ComponentActivity() {
                             navController.navigate("aiChat")
                         },
                         onGoToCategories = {
-                            navController.navigate("categorySettingsScreen")
+                            navController.navigate("loadingCash")
                         }
                     )
                 }

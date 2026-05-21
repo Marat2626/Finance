@@ -41,6 +41,73 @@ open class EISviewModel(
         }
     }
 
+
+    // В файл EISviewModel.kt добавьте:
+
+    // В начало класса добавьте:
+    private val analyzer = TransactionAnalyzer()
+    private val _blackHoles = MutableStateFlow<List<TransactionAnalyzer.BlackHole>>(emptyList())
+    val blackHoles: StateFlow<List<TransactionAnalyzer.BlackHole>> = _blackHoles.asStateFlow()
+
+
+
+    fun analyzeBlackHoles() {
+        viewModelScope.launch {
+            try {
+                // Получаем ВСЕ расходы
+                val allExpenses = db.dataExcelDao().getAllExpensesList()
+
+                // Получаем настройки важности (из категорий и отдельных расходов)
+                val categorySettings = db.categorySettingsDao().getAllSync()
+                val expenseSettings = db.expenseSettingsDao().getAllSync()
+
+                // ФИЛЬТРУЕМ: берём только НЕОБЯЗАТЕЛЬНЫЕ и НЕРАЗМЕЧЕННЫЕ
+                val filteredExpenses = allExpenses.filter { expense ->
+                    val importance = getExpenseImportance(expense, categorySettings, expenseSettings)
+                    importance == ImportanceType.NON_ESSENTIAL || importance == null
+                }
+
+                Log.d("EISvm", "📊 Всего расходов: ${allExpenses.size}")
+                Log.d("EISvm", "🔍 Анализируем: ${filteredExpenses.size} (необязательные + неразмеченные)")
+
+                val holes = analyzer.findBlackHoles(filteredExpenses)
+                _blackHoles.value = holes
+
+            } catch (e: Exception) {
+                Log.e("EISvm", "Ошибка анализа чёрных дыр", e)
+            }
+        }
+    }
+
+    // Вспомогательная функция определения важности
+    private fun getExpenseImportance(
+        expense: DateExcel,
+        categorySettings: List<CategorySettings>,
+        expenseSettings: List<ExpenseSettings>
+    ): ImportanceType? {
+        // 1. Сначала проверяем настройки конкретного описания
+        val expenseSetting = expenseSettings.find {
+            it.category == expense.category && it.description == expense.description
+        }
+        if (expenseSetting != null) {
+            return expenseSetting.importance
+        }
+
+        // 2. Потом проверяем настройки категории
+        val categorySetting = categorySettings.find { it.category == expense.category }
+        if (categorySetting != null) {
+            return categorySetting.importance
+        }
+
+        // 3. Не размечено
+        return null
+    }
+
+    fun clearBlackHoles() {
+        _blackHoles.value = emptyList()
+    }
+
+
     fun getCategory ():Flow<List<DateExcel>> {
 
         return db.dataExcelDao().GetAll()
@@ -95,13 +162,6 @@ open class EISviewModel(
 
             } catch (e: Exception) {
                 Log.e("save", "Ошибка загрузки save", e)
-            }
-        }
-    }
-    fun loadData() {
-        viewModelScope.launch {
-            daoMethod(db.dataExcelDao()).collect { list ->
-                _transactions.value = list
             }
         }
     }

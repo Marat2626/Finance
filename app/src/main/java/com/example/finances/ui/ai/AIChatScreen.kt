@@ -1,6 +1,7 @@
 package com.example.finances
 
 
+import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +55,18 @@ fun AIChatScreen(
     val monthlyExpenses by aiViewModel.monthlyExpenses.collectAsState()
     val categories by aiViewModel.categories.collectAsState()
     val allTransactions by aiViewModel.expenses.collectAsState()
+
+    val expensesViewModel: EISviewModel = viewModel(
+        key = "ai_expenses",
+        factory = EISViewModelFactory(
+            context.applicationContext as Application,
+            { it.getAllExpenses() },
+            "Расходы",
+        )
+    )
+
+
+    val blackHoles by expensesViewModel.blackHoles.collectAsState()
 
     // Формируем финансовый контекст
     val financialContext = remember(totalBalance, monthlyIncome, monthlyExpenses, categories, allTransactions) {
@@ -146,14 +159,7 @@ fun AIChatScreen(
                         contentDescription = "AI",
                         tint = AppColors.current.icones
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Text(
-                        "Марат AI",
-                        fontSize = 22.sp,
-                        style = TextStyle(AppColors.current.icones),
-                        fontWeight = FontWeight.Bold
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     if (serverAvailable == true) {
                         Text(
@@ -171,16 +177,37 @@ fun AIChatScreen(
                         )
                     }
 
+
+
+                    Button(
+                        onClick = { expensesViewModel.analyzeBlackHoles() },
+                        enabled = true,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .padding(start = 15.dp)
+                            .height(30.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF8B1A1A),
+                        ),
+                    ) {
+                        Text(
+                            text = "Анализ трат",
+                            style = TextStyle(color = Color.White),
+                            fontSize = 14.sp
+                        )
+                    }
+
+
                     // Кнопка "Делиться"
                     Button(
                         onClick = {
                             if (!isLoading && serverAvailable == true) {
                                 val shareMsg = buildString {
-                                    appendLine("📊 **Мои финансовые данные:**")
+                                    appendLine("**Мои финансовые данные:**")
                                     appendLine()
-                                    appendLine("💰 **Общий баланс:** ${"%,.0f".format(totalBalance)} ₽")
-                                    appendLine("📈 **Доходы за месяц:** ${"%,.0f".format(monthlyIncome)} ₽")
-                                    appendLine("📉 **Расходы за месяц:** ${"%,.0f".format(monthlyExpenses)} ₽")
+                                    appendLine("**Общий баланс:** ${"%,.0f".format(totalBalance)} ₽")
+                                    appendLine("**Доходы за месяц:** ${"%,.0f".format(monthlyIncome)} ₽")
+                                    appendLine("**Расходы за месяц:** ${"%,.0f".format(monthlyExpenses)} ₽")
                                     appendLine()
 
                                     if (categories.isNotEmpty()) {
@@ -208,7 +235,7 @@ fun AIChatScreen(
 
                                     messages = messages + when (response) {
                                         is AIResponse.Success -> ChatMessage("assistant", response.message)
-                                        is AIResponse.Error -> ChatMessage("assistant", "❌ ${response.error}")
+                                        is AIResponse.Error -> ChatMessage("assistant", "${response.error}")
                                     }
 
                                     isLoading = false
@@ -237,6 +264,36 @@ fun AIChatScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
 
+
+        // Окно с дырами
+        if (blackHoles.isNotEmpty()) {
+            AlertDialog(
+                containerColor = AppColors.current.screenBG,
+                onDismissRequest = { expensesViewModel.clearBlackHoles() },
+                title = { Text("Чёрные дыры") },
+                text = {
+                    LazyColumn {
+                        items(blackHoles) { hole ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                                colors = CardDefaults.cardColors(containerColor = AppColors.current.cardBox)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("${hole.category} по ${hole.dayOfWeek}", fontWeight = FontWeight.Bold, color = AppColors.current.text)
+                                    Text("Средний чек: ${hole.avgAmount.toInt()}₽ | Норма: ${hole.normalMedian.toInt()}₽", color = AppColors.current.textAlfa)
+                                    Text("Потери: ${hole.monthlyLoss.toInt()}₽/мес",color = AppColors.casesRed)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { expensesViewModel.clearBlackHoles() }) {
+                        Text("Закрыть",  color = AppColors.current.text)
+                    }
+                }
+            )
+        }
         // Список сообщений
         LazyColumn(
             modifier = Modifier

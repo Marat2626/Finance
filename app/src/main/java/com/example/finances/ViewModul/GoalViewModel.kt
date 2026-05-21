@@ -42,7 +42,8 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
         savedAmount: Double = 0.0,
         monthsCount: Int,
         monthlyPayment: Double = 0.0,
-        createdAt: LocalDateTime = LocalDateTime.now()
+        createdAt: LocalDateTime = LocalDateTime.now(),
+        category: String = ""
     ) {
         viewModelScope.launch {
             try {
@@ -56,7 +57,8 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
                         savedAmount = savedAmount,
                         monthsCount = monthsCount,
                         monthlyPayment = monthlyPayment,
-                        createdDate = createdAt
+                        createdDate = createdAt,
+                        category = category
                     )
                     goalId = db.goalDao().insert(dataGoal).toInt()
                     lastCreatedGoalId = goalId

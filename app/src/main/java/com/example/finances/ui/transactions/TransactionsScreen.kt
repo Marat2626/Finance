@@ -131,6 +131,9 @@ fun loadingCash(
     val viewModelG: GoalViewModel = viewModel()
 
 
+    val goals by viewModelG.transactions.collectAsState()
+
+
     val expenses by viewModelE.transactions.collectAsState()
     val incomes by viewModelI.transactions.collectAsState()
     val savings by viewModelS.transactions.collectAsState()
@@ -142,11 +145,12 @@ fun loadingCash(
             .sortedByDescending { it.date }
     }
 
-    val goals by viewModelG.transactions.collectAsState()
-    LaunchedEffect(allTransactions) {
-        filterViewModel.setTransactions(allTransactions)
-    }
+    val priorityMode by filterViewModel.priorityMode.collectAsState()
 
+    LaunchedEffect(allTransactions, priorityMode) {
+        val data = if (priorityMode) expenses else allTransactions
+        filterViewModel.setTransactions(data)
+    }
 
     val options = listOf("Накопление", "Расходы", "Зачисления")
 
@@ -164,7 +168,6 @@ fun loadingCash(
     val filterCategoryOptions = listOf("Все категории") + userCategories
 
 
-    val priorityMode by filterViewModel.priorityMode.collectAsState()
     val categoryGroupMode by filterViewModel.categoryGroupMode.collectAsState()
 
 // ←←← ДОБАВЬ ЭТУ СТРОКУ
@@ -183,6 +186,9 @@ fun loadingCash(
     var overAmount by remember { mutableStateOf(0.0) }
     var totalAfterSave by remember { mutableStateOf(0.0) }
 
+
+    val filterViewModel1: FilterViewModel = viewModel()
+    val selectedPeriod1 by filterViewModel1.selectedPeriod.collectAsState()
 
 
 
@@ -285,14 +291,47 @@ fun loadingCash(
                     ).show()
                 }
             },
+
             onClearUI = {
                 categorySelections.clear()
                 Toast.makeText(context, " очищено", Toast.LENGTH_SHORT).show()
+            },
+
+            filterViewModel = filterViewModel,
+            periodFilter = selectedPeriod,
+            onPeriodFilterChange = {
+                val newPeriod = when (selectedPeriod) {
+                    "Все время" -> "Текущий месяц"
+                    "Текущий месяц" -> "Прошлый месяц"
+                    "Прошлый месяц" -> "Все время"
+                    else -> "Все время"
+                }
+                filterViewModel.updatePeriod(newPeriod)
             },
             onToggleFilter = {
                 filterViewModel.toggleFilterPanel()
             }
         )
+
+        if (showFilterPanel) {
+            FilterPanel(
+                selectedType = selectedType,
+                onTypeChange = { filterViewModel.updateType(it) },
+                selectedCategory = selectedCategoryF,
+                onCategoryChange = { filterViewModel.updateCategory(it) },
+                selectedDate = selectedPeriod,
+                onDateChange = { filterViewModel.updatePeriod(it) },
+                minPrice = minPrice,
+                onMinPriceChange = { filterViewModel.updateMinPrice(it) },
+                maxPrice = maxPrice,
+                onMaxPriceChange = { filterViewModel.updateMaxPrice(it) },
+                typeOptions = filterTypeOptions,
+                categoryOptions = filterCategoryOptions,
+                dateOptions = filterDateOptions,
+                onClose = { filterViewModel.toggleFilterPanel() },
+                onReset = { filterViewModel.resetFilters() }
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -300,25 +339,7 @@ fun loadingCash(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            if (showFilterPanel) {
-                FilterPanel(
-                    selectedType = selectedType,
-                    onTypeChange = { filterViewModel.updateType(it) },
-                    selectedCategory = selectedCategoryF,
-                    onCategoryChange = { filterViewModel.updateCategory(it) },
-                    selectedDate = selectedPeriod,
-                    onDateChange = { filterViewModel.updatePeriod(it) },
-                    minPrice = minPrice,
-                    onMinPriceChange = { filterViewModel.updateMinPrice(it) },
-                    maxPrice = maxPrice,
-                    onMaxPriceChange = { filterViewModel.updateMaxPrice(it) },
-                    typeOptions = filterTypeOptions,
-                    categoryOptions = filterCategoryOptions,
-                    dateOptions = filterDateOptions,
-                    onClose = { filterViewModel.toggleFilterPanel() },
-                    onReset = { filterViewModel.resetFilters() }
-                )
-            }
+
 
             // Группировка по датам
             val groupedTransactions = remember(filteredTransactions) {
@@ -411,7 +432,10 @@ fun loadingCash(
                                         )
                                     }
                                 }
+                                Spacer(Modifier.padding(vertical = 50.dp))
                             }
+
+
                         } else {
                             // Обычный режим — ВОТ ЭТО НУЖНО ДОБАВИТЬ
                             groupedTransactions.forEach { (localDate, transactions) ->
@@ -476,23 +500,23 @@ fun loadingCash(
                                             settingsViewModel.saveSelectedCategories(
                                                 categorySelections.toMap()
                                             )
-                                            val db = DataTransactions.getDatabase(app)
-                                            val savedCategories =
-                                                db.categorySettingsDao().getAllSettings().first()
-                                            val savedExpenses =
-                                                db.expenseSettingsDao().getAllSettings().first()
-                                            categorySelections.clear()
-                                            savedCategories.forEach { s ->
-                                                s.importance?.let {
-                                                    categorySelections[s.category] = it
-                                                }
-                                            }
-                                            savedExpenses.forEach { s ->
-                                                s.importance?.let {
-                                                    categorySelections["${s.category}|||${s.description}"] =
-                                                        it
-                                                }
-                                            }
+//                                            val db = DataTransactions.getDatabase(app)
+//                                            val savedCategories =
+//                                                db.categorySettingsDao().getAllSettings().first()
+//                                            val savedExpenses =
+//                                                db.expenseSettingsDao().getAllSettings().first()
+//                                            categorySelections.clear()
+//                                            savedCategories.forEach { s ->
+//                                                s.importance?.let {
+//                                                    categorySelections[s.category] = it
+//                                                }
+//                                            }
+//                                            savedExpenses.forEach { s ->
+//                                                s.importance?.let {
+//                                                    categorySelections["${s.category}|||${s.description}"] =
+//                                                        it
+//                                                }
+//                                            }
 
                                             Toast.makeText(
                                                 context,
@@ -692,9 +716,15 @@ fun topBar(
 
     onShowSaved: () -> Unit,
     onClearUI: () -> Unit,
+
+    filterViewModel: FilterViewModel,  // ← ViewModel
+    periodFilter: String,              // ← текущий период
+    onPeriodFilterChange: () -> Unit,
     // Добавляем параметр для фильтра
     onToggleFilter: () -> Unit
 ) {
+
+
 
         Row(
             modifier = Modifier
@@ -710,25 +740,31 @@ fun topBar(
                         Row(modifier = Modifier
                             .fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = onToggleFilter,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
+
+
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.Transparent
+                                ),
+                                onClick = onToggleFilter,
+
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+
                                     Icon(
                                         painter = painterResource(id = R.drawable.filter),
                                         modifier = Modifier.size(30.dp),
                                         contentDescription = "Фильтр",
                                         tint = AppColors.current.icones
                                     )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = "ФИЛЬТЕР",
+                                        fontSize = 20.sp,
+                                        color = AppColors.current.icones,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
-                                Spacer(modifier = Modifier.padding(horizontal = 5.dp))
-                                Text(
-                                    text = "ФИЛЬТЕР",
-                                    fontSize = 20.sp,
-                                    color = AppColors.current.icones,
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
 
 
@@ -814,9 +850,9 @@ fun topBar(
                                 Spacer(Modifier.padding(horizontal = 4.dp))
                                 // Кнопка "Очистить UI" - красная
                                 Button(
-                                    onClick = onClearUI,
-                                    modifier = Modifier
+                                    onClick = onPeriodFilterChange,
 
+                                    modifier = Modifier
                                         .padding(bottom = 10.dp)
                                         .background(
                                             AppColors.current.icones,
@@ -830,11 +866,14 @@ fun topBar(
                                         horizontal = 12.dp,
                                         vertical = 0.dp
                                     ),
-
-                                    ) {
+                                ) {
                                     Text(
-                                        text = "Очистить",
-                                        fontSize = 15.sp,
+                                        text = when (periodFilter) {
+                                            "Текущий месяц" -> "Месяц"
+                                            "Прошлый месяц" -> "Прошлый"
+                                            else -> "Всё время"
+                                        },
+                                        fontSize = 13.sp,
                                         style = TextStyle(AppColors.current.cardBox),
                                         fontWeight = FontWeight.Bold
                                     )
@@ -862,7 +901,7 @@ fun topBar(
 
                                     ) {
                                     Text(
-                                        text = "Фильтр",
+                                        text = "Очистить",
                                         fontSize = 15.sp,
                                         style = TextStyle(AppColors.current.cardBox),
                                         fontWeight = FontWeight.Bold
@@ -1156,7 +1195,7 @@ fun FilterPanel(
             Text(
                 text = "Категория",
                 style = TextStyle(
-                    color = AppColors.current.cardBox,
+                    color = AppColors.current.text,
                     fontSize = 14.sp
                 ),
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -1180,7 +1219,7 @@ fun FilterPanel(
             Text(
                 text = "Период",
                 style = TextStyle(
-                    color = AppColors.current.cardBox,
+                    color = AppColors.current.text,
                     fontSize = 14.sp
                 ),
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -1204,7 +1243,7 @@ fun FilterPanel(
             Text(
                 text = "Ценовой диапазон",
                 style = TextStyle(
-                    color = AppColors.current.cardBox,
+                    color = AppColors.current.text,
                     fontSize = 14.sp
                 ),
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -1226,11 +1265,11 @@ fun FilterPanel(
                         )
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFC5C5C5),
-                        unfocusedBorderColor = Color(0xFFFFFFFF),
+                        focusedBorderColor = AppColors.current.icones,
+                        unfocusedBorderColor = AppColors.current.icones,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        cursorColor = Color(0xFFADAAAA)
+                        cursorColor = AppColors.current.icones
                     ),
                     shape = RoundedCornerShape(8.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
