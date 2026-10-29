@@ -235,10 +235,10 @@ class MlGoalPredictor(context: Context) {
         if (savedRatio >= 0.5) finalProb = (finalProb + 15).coerceIn(0, 100)
 
         return when {
-            finalProb >= 85 -> MlPredictionResult(finalProb, "Отлично!", "🚀", androidx.compose.ui.graphics.Color(0xFF035715), "Вы на верном пути!")
-            finalProb >= 65 -> MlPredictionResult(finalProb, "Хороший шанс", "👍", androidx.compose.ui.graphics.Color(0xFF124370), "Нужно немного поднажать")
-            finalProb >= 40 -> MlPredictionResult(finalProb, "Средний шанс", "⚠️", androidx.compose.ui.graphics.Color(0xFFC49F41), "Риск срыва")
-            else -> MlPredictionResult(finalProb, "Высокий риск", "❌", androidx.compose.ui.graphics.Color(0xFF940C1B), "Пересмотрите стратегию")
+            finalProb >= 85 -> MlPredictionResult(finalProb, "Отлично!", "", androidx.compose.ui.graphics.Color(0xFF035715), "Вы на верном пути!")
+            finalProb >= 65 -> MlPredictionResult(finalProb, "Хороший шанс", "", androidx.compose.ui.graphics.Color(0xFF124370), "Нужно немного поднажать")
+            finalProb >= 40 -> MlPredictionResult(finalProb, "Средний шанс", "⚠", androidx.compose.ui.graphics.Color(0xFFC49F41), "Риск срыва")
+            else -> MlPredictionResult(finalProb, "Высокий риск", "", androidx.compose.ui.graphics.Color(0xFF940C1B), "Пересмотрите стратегию")
         }
     }
 }

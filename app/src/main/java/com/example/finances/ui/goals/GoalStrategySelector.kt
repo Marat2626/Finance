@@ -239,7 +239,7 @@ fun InflationPredictionCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "📈 Прогноз инфляции (ML)",
+                "Прогноз инфляции",
                 fontSize = 14.sp,
                 style = TextStyle(AppColors.current.textAlfa)
             )
@@ -269,7 +269,7 @@ fun InflationPredictionCard(
                 onClick = prediction.onAccept,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(60.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AppColors.current.icones),
                 shape = RoundedCornerShape(14.dp)
             ) {

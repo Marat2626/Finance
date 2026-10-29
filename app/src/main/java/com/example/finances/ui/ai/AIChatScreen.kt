@@ -129,7 +129,7 @@ fun AIChatScreen(
             messages = listOf(
                 ChatMessage(
                     role = "assistant",
-                    content = "Привет! Я Марат — твой финансовый помощник 👋\n\n" +
+                    content = "Привет! Я Алиса — твой финансовый помощник 👋\n\n" +
                             "Я вижу все твои доходы, расходы и накопления.\n" +
                             "Спрашивай меня о чём угодно:\n" +
                             "• Сколько я потратил в этом месяце?\n" +
@@ -155,7 +155,7 @@ fun AIChatScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         painter = painterResource(id = R.drawable.ai),
-                        modifier = Modifier.size(26.dp),
+                        modifier = Modifier.size(30.dp),
                         contentDescription = "AI",
                         tint = AppColors.current.icones
                     )
@@ -270,7 +270,7 @@ fun AIChatScreen(
             AlertDialog(
                 containerColor = AppColors.current.screenBG,
                 onDismissRequest = { expensesViewModel.clearBlackHoles() },
-                title = { Text("Чёрные дыры") },
+                title = { Text("Избыточные расходы",fontWeight = FontWeight.Bold, color = AppColors.current.text, fontSize = 20.sp) },
                 text = {
                     LazyColumn {
                         items(blackHoles) { hole ->

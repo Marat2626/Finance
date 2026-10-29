@@ -77,7 +77,7 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
 
                 if (monthlyPayment > 0) {
                     val planSettings = PlanSettings(
-                        category = "goal_$goalId",  // ← вернуть goal_id
+                        category = "goal_$goalId",
                         importance = ImportanceType.ESSENTIAL,
                         plannedAmount = monthlyPayment,
                         isDetailed = false
@@ -92,9 +92,7 @@ class GoalViewModel(application: Application) : AndroidViewModel(application){
             }
         }
     }
-    fun getLastCreatedGoalId(): Int {
-        return lastCreatedGoalId
-    }
+
 
     fun updateAmount(category: String, amount: Double?) {
 

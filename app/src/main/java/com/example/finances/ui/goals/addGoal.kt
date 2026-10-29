@@ -65,15 +65,15 @@ fun addGoal(
     val selectedCategory = remember { mutableStateOf("") }  // ← пустая строка
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val categories = listOf("Одежда", "Квартира", "Мебель", "Машина", "Телефон", "Отпуск")
-    val categoryIcons = mapOf(
-        "Одежда" to "👗",
-        "Квартира" to "🏠",
-        "Мебель" to "🛋️",
-        "Машина" to "🚗",
-        "Телефон" to "📱",
-        "Отпуск" to "✈️"
-    )
+//    val categories = listOf("Одежда", "Квартира", "Мебель", "Машина", "Телефон", "Отпуск")
+//    val categoryIcons = mapOf(
+//        "Одежда" to "",
+//        "Квартира" to "🏠",
+//        "Мебель" to "🛋",
+//        "Машина" to "",
+//        "Телефон" to "",
+//        "Отпуск" to ""
+//    )
 
     ModalBottomSheet(
         modifier = Modifier.height(650.dp),
@@ -297,7 +297,7 @@ fun addGoal(
                     FilterChip(
                         selected = selectedCategory.value == "Отпуск",
                         onClick = { selectedCategory.value = "Отпуск" },
-                        label = { Text("✈Отпуск", fontSize = 14.sp) },
+                        label = { Text("Отпуск", fontSize = 14.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = AppColors.current.icones,
                             selectedLabelColor = Color.White,

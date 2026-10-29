@@ -47,7 +47,6 @@ fun settingsScreen(
     onClipAddOperation: () -> Unit,
     onSettingScreen: () -> Unit,
     onAI: () -> Unit,
-    onSettingDetails: () -> Unit,   // ← переход на selectCategiry
 ) {
 
     val balanceViewModel: BalanseViewModel = viewModel()
@@ -758,15 +757,6 @@ fun boxesTwo(
 }
 
 
-
-
-
-
-data class CategoryWithSelection(
-    val category: String,
-    val importance: ImportanceType?,
-    val count: Int
-)
 class DatabaseHelper(private val context: Context) {
 
     suspend fun clearAllData(): Boolean = withContext(Dispatchers.IO) {

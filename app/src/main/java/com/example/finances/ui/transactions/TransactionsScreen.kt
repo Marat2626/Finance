@@ -94,18 +94,13 @@ fun loadingCash(
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as Application
-
-
-    // Основной ViewModel для фильтров (общий для всех экранов)
     val filterViewModel: FilterViewModel = viewModel()
 
     val operationType = remember { mutableStateOf("") }
     val amountTransaction = remember { mutableStateOf("") }
     val description = remember { mutableStateOf("") }
-
     val selectedCategory = remember { mutableStateOf("") }
 
-    // Состояния из FilterViewModel
     val showFilterPanel by filterViewModel.showFilterPanel.collectAsState()
     val selectedPeriod by filterViewModel.selectedPeriod.collectAsState()
     val selectedType by filterViewModel.selectedType.collectAsState()
@@ -115,7 +110,6 @@ fun loadingCash(
     val filteredTransactions by filterViewModel.filteredTransactions.collectAsState()
     val showTransactionSheet = remember { mutableStateOf(false) }
 
-    // ViewModel'ы для получения всех транзакций
     val viewModelE: EISviewModel = viewModel(
         key = "expenses",
         factory = EISViewModelFactory(app, { it.getAllExpenses() }, "Расходы")
@@ -130,16 +124,13 @@ fun loadingCash(
     )
     val viewModelG: GoalViewModel = viewModel()
 
-
     val goals by viewModelG.transactions.collectAsState()
-
 
     val expenses by viewModelE.transactions.collectAsState()
     val incomes by viewModelI.transactions.collectAsState()
     val savings by viewModelS.transactions.collectAsState()
 
 
-    // Объединяем все aтранзакции и передаём во FilterViewModel
     val allTransactions = remember(expenses, incomes, savings) {
         (expenses + incomes + savings)
             .sortedByDescending { it.date }
@@ -154,7 +145,6 @@ fun loadingCash(
 
     val options = listOf("Накопление", "Расходы", "Зачисления")
 
-    // Список категорий (можно вынести в отдельный объект)
     val userCategories = remember(allTransactions) {
         allTransactions
             .map { it.category }
@@ -162,15 +152,12 @@ fun loadingCash(
             .sorted()
     }
 
-
     val filterTypeOptions = listOf("Все", "Расходы", "Зачисления", "Накопление")
     val filterDateOptions = listOf("Все время", "Сегодня", "Неделя", "Месяц", "6 месяцев", "Год")
     val filterCategoryOptions = listOf("Все категории") + userCategories
 
 
     val categoryGroupMode by filterViewModel.categoryGroupMode.collectAsState()
-
-// ←←← ДОБАВЬ ЭТУ СТРОКУ
     val categorySelections = remember { mutableStateMapOf<String, ImportanceType>() }
 
     val scope = rememberCoroutineScope()
@@ -179,18 +166,10 @@ fun loadingCash(
     val planViewModel: PlanViewModel = viewModel()
 
 
-    // В начале loadingCash, рядом с другими var:
     var showBudgetWarning by remember { mutableStateOf(false) }
     var averageIncome by remember { mutableStateOf(0.0) }
-    var currentPlan by remember { mutableStateOf(0.0) }
     var overAmount by remember { mutableStateOf(0.0) }
     var totalAfterSave by remember { mutableStateOf(0.0) }
-
-
-    val filterViewModel1: FilterViewModel = viewModel()
-    val selectedPeriod1 by filterViewModel1.selectedPeriod.collectAsState()
-
-
 
     LaunchedEffect(priorityMode) {
         if (priorityMode) {
@@ -202,10 +181,6 @@ fun loadingCash(
                 .distinct().size.coerceAtLeast(1)
             averageIncome = recentIncomes.sumOf { it.amount } / monthsCount
 
-            val planSettings = db.planSettingsDao().getAll().first()
-            currentPlan = planSettings.sumOf { it.plannedAmount }
-
-            // Загрузка сохранённых настроек приоритетов
             val savedCategories = db.categorySettingsDao().getAllSettings().first()
             val savedExpenses = db.expenseSettingsDao().getAllSettings().first()
             categorySelections.clear()
@@ -222,7 +197,6 @@ fun loadingCash(
         }
     }
 
-// После всех LaunchedEffect добавь:
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -250,8 +224,6 @@ fun loadingCash(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-
-
 
     Column(
         modifier = Modifier
@@ -296,8 +268,6 @@ fun loadingCash(
                 categorySelections.clear()
                 Toast.makeText(context, " очищено", Toast.LENGTH_SHORT).show()
             },
-
-            filterViewModel = filterViewModel,
             periodFilter = selectedPeriod,
             onPeriodFilterChange = {
                 val newPeriod = when (selectedPeriod) {
@@ -340,15 +310,11 @@ fun loadingCash(
             contentAlignment = Alignment.Center
         ) {
 
-
-            // Группировка по датам
             val groupedTransactions = remember(filteredTransactions) {
                 filteredTransactions
                     .groupBy { it.date.toLocalDate() }
                     .toSortedMap(compareByDescending { it })
             }
-
-
 
             if (groupedTransactions.isEmpty()) {
 
@@ -384,13 +350,8 @@ fun loadingCash(
                     ) {
 
                         if (categoryGroupMode) {
-                            // Общая группировка по категориям за весь период (без разделения по дням)
-                            val allFiltered =
-                                filteredTransactions  // или priorityFilteredTransactions
+                            val allFiltered = filteredTransactions
                             val groupedByCategory = allFiltered.groupBy { it.category }
-
-                            // Одна группа с заголовком
-
 
                             item(key = "priority_group") {
                                 DateGroupContainer {
@@ -406,10 +367,8 @@ fun loadingCash(
                                             currentImportance = categorySelections[category],
                                             onImportanceChange = { imp ->
                                                 if (categorySelections[category] == imp) {
-                                                    // Снимаем выделение
                                                     categorySelections.remove(category)
                                                 } else {
-                                                    // Меняем важность — удаляем все подкатегории этой категории
                                                     val keysToRemove =
                                                         categorySelections.keys.filter {
                                                             it.startsWith(
@@ -421,7 +380,6 @@ fun loadingCash(
                                                             it
                                                         )
                                                     }
-                                                    // Устанавливаем новую важность
                                                     categorySelections[category] = imp
                                                 }
                                             },
@@ -437,12 +395,10 @@ fun loadingCash(
 
 
                         } else {
-                            // Обычный режим — ВОТ ЭТО НУЖНО ДОБАВИТЬ
                             groupedTransactions.forEach { (localDate, transactions) ->
                                 item(key = "header_$localDate") {
                                     DateHeader(date = localDate)
                                 }
-
                                 item(key = "group_$localDate") {
                                     DateGroupContainer {
                                         transactions.forEachIndexed { index, transaction ->
@@ -478,13 +434,10 @@ fun loadingCash(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .align(Alignment.BottomCenter)  // вот это прижимает к низу
+                            .align(Alignment.BottomCenter)
                     ) {
 
-                        // Кнопки приоритетов — появляются только в режиме priorityMode
                         if (priorityMode) {
-
-
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -493,30 +446,29 @@ fun loadingCash(
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Кнопка "Сохранить категории"
                                 Button(
                                     onClick = {
                                         scope.launch {
                                             settingsViewModel.saveSelectedCategories(
                                                 categorySelections.toMap()
                                             )
-//                                            val db = DataTransactions.getDatabase(app)
-//                                            val savedCategories =
-//                                                db.categorySettingsDao().getAllSettings().first()
-//                                            val savedExpenses =
-//                                                db.expenseSettingsDao().getAllSettings().first()
-//                                            categorySelections.clear()
-//                                            savedCategories.forEach { s ->
-//                                                s.importance?.let {
-//                                                    categorySelections[s.category] = it
-//                                                }
-//                                            }
-//                                            savedExpenses.forEach { s ->
-//                                                s.importance?.let {
-//                                                    categorySelections["${s.category}|||${s.description}"] =
-//                                                        it
-//                                                }
-//                                            }
+                                            val db = DataTransactions.getDatabase(app)
+                                            val savedCategories =
+                                                db.categorySettingsDao().getAllSettings().first()
+                                            val savedExpenses =
+                                                db.expenseSettingsDao().getAllSettings().first()
+                                            categorySelections.clear()
+                                            savedCategories.forEach { s ->
+                                                s.importance?.let {
+                                                    categorySelections[s.category] = it
+                                                }
+                                            }
+                                            savedExpenses.forEach { s ->
+                                                s.importance?.let {
+                                                    categorySelections["${s.category}|||${s.description}"] =
+                                                        it
+                                                }
+                                            }
 
                                             Toast.makeText(
                                                 context,
@@ -546,8 +498,6 @@ fun loadingCash(
                                     )
                                 }
 
-                                // Кнопка "Создать план"
-                                // Кнопка "Создать план"
                                 Button(
                                     onClick = {
                                         scope.launch {
@@ -555,7 +505,6 @@ fun loadingCash(
                                             val allExpenses =
                                                 db.dataExcelDao().getAllExpenses().first()
 
-                                            // Считаем сумму из categorySelections (то что нажато в UI)
                                             var newPlanAmount = 0.0
                                             categorySelections.forEach { (key, _) ->
                                                 newPlanAmount += if (key.contains("|||")) {
@@ -574,7 +523,6 @@ fun loadingCash(
                                             } else {
                                                 planViewModel.createPlanFromDb(categorySelections.toMap())
 
-                                                // Перезагружаем
                                                 val sc =
                                                     db.categorySettingsDao().getAllSettings()
                                                         .first()
@@ -623,7 +571,6 @@ fun loadingCash(
                             }
 
                         }
-                        // Диалог предупреждения о бюджете
                         if (showBudgetWarning) {
                             showBudgetWarningDialog(
                                 averageIncome = averageIncome,
@@ -640,7 +587,6 @@ fun loadingCash(
                                 },
                                 onGoToCategories = {
                                     showBudgetWarning = false
-                                    // Можно перейти на экран категорий или просто закрыть
                                 },
                                 onDismiss = {
                                     showBudgetWarning = false
@@ -656,9 +602,8 @@ fun loadingCash(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.BottomCenter)  // вот это прижимает к низу
+                    .align(Alignment.BottomCenter)
             ) {
-                // Нижняя навигация
                 bottomNavigationBar(
                     { onHomeClick() },
                     { onClipAddOperation() },
@@ -716,206 +661,196 @@ fun topBar(
 
     onShowSaved: () -> Unit,
     onClearUI: () -> Unit,
-
-    filterViewModel: FilterViewModel,  // ← ViewModel
-    periodFilter: String,              // ← текущий период
+    periodFilter: String,
     onPeriodFilterChange: () -> Unit,
-    // Добавляем параметр для фильтра
     onToggleFilter: () -> Unit
 ) {
-
-
+     Spacer(modifier = Modifier.height(5.dp))
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 15.dp)
                 .height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
 
-                    Column ( modifier = Modifier.fillMaxWidth()
+        Column ( modifier = Modifier.fillMaxWidth()
 
+        ) {
+            Row(modifier = Modifier
+                .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween) {
+
+
+                Row(
+                    modifier = Modifier,
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onTogglePriorityMode,
+                        modifier = Modifier.size(38.dp)
                     ) {
-                        Row(modifier = Modifier
-                            .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween) {
-
-
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Color.Transparent
-                                ),
-                                onClick = onToggleFilter,
-
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.filter),
-                                        modifier = Modifier.size(30.dp),
-                                        contentDescription = "Фильтр",
-                                        tint = AppColors.current.icones
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Text(
-                                        text = "ФИЛЬТЕР",
-                                        fontSize = 20.sp,
-                                        color = AppColors.current.icones,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-
-
-                            Row(
-                                modifier = Modifier,
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = onTogglePriorityMode,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.stark),
-                                        modifier = Modifier.size(30.dp),
-                                        contentDescription = "Приоритеты",
-                                        tint = if (priorityMode) Color(0xFFD4AF37) else AppColors.current.icones
-                                    )
-                                }
-
-                                IconButton(onClick = onOpenCamera) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.cameras),
-                                        modifier = Modifier.size(32.dp),
-                                        contentDescription = "Камера",
-                                        tint = AppColors.current.icones
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { showTransactionSheet.value = true },
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.pluss),
-                                        modifier = Modifier.size(30.dp),
-                                        contentDescription = "Плюс",
-                                        tint = AppColors.current.icones
-                                    )
-                                }
-                            }
-                        }
-                        if (priorityMode) {
-
-                            Row(
-                                modifier = Modifier.weight(1f)
-                                    .padding(horizontal = 15.dp)
-                            ,
-                                verticalAlignment = Alignment.CenterVertically,
-
-
-                                ) {
-
-                                // Кнопка "Сохраненные" - синяя
-                                Button(
-                                    onClick = onShowSaved,
-                                    modifier = Modifier
-
-                                        .padding(bottom = 10.dp)
-                                        .background(
-                                            AppColors.current.icones,
-                                            shape = RoundedCornerShape(15.dp),
-                                        )
-                                        .height(30.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Transparent,
-                                    ),
-                                    contentPadding = PaddingValues(
-                                        horizontal = 12.dp,
-                                        vertical = 0.dp
-                                    ),
-
-                                    ) {
-                                    Text(
-                                        text = "Сохраненные",
-                                        fontSize = 15.sp,
-                                        style = TextStyle(AppColors.current.cardBox),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Spacer(Modifier.padding(horizontal = 4.dp))
-                                // Кнопка "Очистить UI" - красная
-                                Button(
-                                    onClick = onPeriodFilterChange,
-
-                                    modifier = Modifier
-                                        .padding(bottom = 10.dp)
-                                        .background(
-                                            AppColors.current.icones,
-                                            shape = RoundedCornerShape(15.dp),
-                                        )
-                                        .height(30.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Transparent,
-                                    ),
-                                    contentPadding = PaddingValues(
-                                        horizontal = 12.dp,
-                                        vertical = 0.dp
-                                    ),
-                                ) {
-                                    Text(
-                                        text = when (periodFilter) {
-                                            "Текущий месяц" -> "Месяц"
-                                            "Прошлый месяц" -> "Прошлый"
-                                            else -> "Всё время"
-                                        },
-                                        fontSize = 13.sp,
-                                        style = TextStyle(AppColors.current.cardBox),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Spacer(Modifier.padding(horizontal = 4.dp))
-
-                                Button(
-                                    onClick = onClearUI,
-                                    modifier = Modifier
-
-                                        .padding(bottom = 10.dp)
-                                        .background(
-                                            AppColors.current.icones,
-                                            shape = RoundedCornerShape(15.dp),
-                                        )
-                                        .height(30.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Transparent,
-                                    ),
-                                    contentPadding = PaddingValues(
-                                        horizontal = 12.dp,
-                                        vertical = 0.dp
-                                    ),
-
-                                    ) {
-                                    Text(
-                                        text = "Очистить",
-                                        fontSize = 15.sp,
-                                        style = TextStyle(AppColors.current.cardBox),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        } else {
-                            // Растягиваем пространство если нет кнопок важности
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
+                        Icon(
+                            painter = painterResource(id = R.drawable.stark),
+                            modifier = Modifier.size(30.dp),
+                            contentDescription = "Приоритеты",
+                            tint = if (priorityMode) Color(0xFFD4AF37) else AppColors.current.icones
+                        )
                     }
 
+                    IconButton(onClick = onOpenCamera) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.cameras),
+                            modifier = Modifier.size(32.dp),
+                            contentDescription = "Камера",
+                            tint = AppColors.current.icones
+                        )
+                    }
 
+                    IconButton(
+                        onClick = { showTransactionSheet.value = true },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.pluss),
+                            modifier = Modifier.size(30.dp),
+                            contentDescription = "Плюс",
+                            tint = AppColors.current.icones
+                        )
+                    }
+                }
 
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.Transparent
+                    ),
+                    modifier = Modifier
+                        .width(140.dp),
+                    onClick = onToggleFilter,
+
+                ) {
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Icon(
+                            painter = painterResource(id = R.drawable.filter),
+                            modifier = Modifier.size(30.dp),
+                            contentDescription = "Фильтр",
+                            tint = AppColors.current.icones
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "ФИЛЬТЕР",
+                            fontSize = 20.sp,
+                            color = AppColors.current.icones,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            if (priorityMode) {
+
+                Row(
+                    modifier = Modifier.weight(1f)
+                        .padding(horizontal = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Button(
+                        onClick = onShowSaved,
+                        modifier = Modifier
+
+                            .padding(bottom = 10.dp)
+                            .background(
+                                AppColors.current.icones,
+                                shape = RoundedCornerShape(15.dp),
+                            )
+                            .height(30.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                        ),
+                        contentPadding = PaddingValues(
+                            horizontal = 12.dp,
+                            vertical = 0.dp
+                        ),
+
+                        ) {
+                        Text(
+                            text = "Сохраненные",
+                            fontSize = 15.sp,
+                            style = TextStyle(AppColors.current.cardBox),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.padding(horizontal = 4.dp))
+                    Button(
+                        onClick = onPeriodFilterChange,
+
+                        modifier = Modifier
+                            .padding(bottom = 10.dp)
+                            .background(
+                                AppColors.current.icones,
+                                shape = RoundedCornerShape(15.dp),
+                            )
+                            .height(30.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                        ),
+                        contentPadding = PaddingValues(
+                            horizontal = 12.dp,
+                            vertical = 0.dp
+                        ),
+                    ) {
+                        Text(
+                            text = when (periodFilter) {
+                                "Текущий месяц" -> "Месяц"
+                                "Прошлый месяц" -> "Прошлый"
+                                else -> "Всё время"
+                            },
+                            fontSize = 13.sp,
+                            style = TextStyle(AppColors.current.cardBox),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(Modifier.padding(horizontal = 4.dp))
+
+                    Button(
+                        onClick = onClearUI,
+                        modifier = Modifier
+
+                            .padding(bottom = 10.dp)
+                            .background(
+                                AppColors.current.icones,
+                                shape = RoundedCornerShape(15.dp),
+                            )
+                            .height(30.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                        ),
+                        contentPadding = PaddingValues(
+                            horizontal = 12.dp,
+                            vertical = 0.dp
+                        ),
+
+                        ) {
+                        Text(
+                            text = "Очистить",
+                            fontSize = 13.sp,
+                            style = TextStyle(AppColors.current.cardBox),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
     }
 
 }
@@ -1000,7 +935,6 @@ fun TransactionBottomSheet(
                         }
                     }
                 } else {
-                    // Простая подсказка
                     Text(
                         text = "Нет активных целей",
                         color = Color.White.copy(alpha = 0.6f),
@@ -1010,7 +944,6 @@ fun TransactionBottomSheet(
                 }
                 Spacer(modifier = Modifier.height(45.dp))
 
-                // Тип операции
                 DropdownInput(
                     value = operationType.value,
                     onValueChange = { operationType.value = it },
@@ -1019,8 +952,6 @@ fun TransactionBottomSheet(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-
-                // Категория
                 DropdownInput(
                     value = selectedCategory.value,
                     onValueChange = { selectedCategory.value = it },
@@ -1030,7 +961,6 @@ fun TransactionBottomSheet(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Сумма
                 input(
                     value = amountTransaction.value,
                     onValueChange = { amountTransaction.value = it },
@@ -1040,7 +970,6 @@ fun TransactionBottomSheet(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Описание
                 input(
                     value = description.value,
                     onValueChange = { description.value = it },
@@ -1050,7 +979,6 @@ fun TransactionBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Кнопка сохранения
                 Button(
                     onClick = {
                         onSaveClick()
@@ -1120,7 +1048,6 @@ fun FilterPanel(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Заголовок с кнопками
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1138,7 +1065,6 @@ fun FilterPanel(
                 Row (
                     verticalAlignment = Alignment.CenterVertically
                 ){
-                    // Кнопка сброса
                     TextButton(
                         onClick = onReset,
                         colors = ButtonDefaults.textButtonColors(
@@ -1167,7 +1093,6 @@ fun FilterPanel(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Фильтр по типу
             Text(
                 text = "Тип операции",
                 style = TextStyle(
@@ -1190,8 +1115,6 @@ fun FilterPanel(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Фильтр по категории
             Text(
                 text = "Категория",
                 style = TextStyle(
@@ -1238,8 +1161,6 @@ fun FilterPanel(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Ценовой диапазон
             Text(
                 text = "Ценовой диапазон",
                 style = TextStyle(
@@ -1253,22 +1174,21 @@ fun FilterPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Поле для минимальной цены
                 OutlinedTextField(
                     value = minPrice,
                     onValueChange = { onMinPriceChange(it) },
                     placeholder = {
                         Text(
                             text = "От",
-                            style = TextStyle( color = AppColors.current.cardBox,),
+                            style = TextStyle( color = AppColors.current.icones,),
                             fontSize = 14.sp
                         )
                     },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = AppColors.current.icones,
                         unfocusedBorderColor = AppColors.current.icones,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = AppColors.current.icones,
+                        unfocusedTextColor = AppColors.current.icones,
                         cursorColor = AppColors.current.icones
                     ),
                     shape = RoundedCornerShape(8.dp),
@@ -1277,15 +1197,13 @@ fun FilterPanel(
                         .weight(1f)
                         .height(50.dp)
                 )
-
-                // Поле для максимальной цены
                 OutlinedTextField(
                     value = maxPrice,
                     onValueChange = { onMaxPriceChange(it) },
                     placeholder = {
                         Text(
                             text = "До",
-                            style = TextStyle( color = AppColors.current.cardBox,),
+                            style = TextStyle( color = AppColors.current.icones),
                             fontSize = 14.sp
                         )
                     },
@@ -1347,8 +1265,6 @@ fun FilterChip(
         }
     }
 }
-
-// Улучшенная карточка транзакции с датой
 @Composable
 fun TransactionCard(
     transaction: DateExcel,
@@ -1399,9 +1315,6 @@ fun TransactionCard(
 
             )
 
-
-
-                // Категория с иконкой
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -1678,7 +1591,7 @@ fun DateHeader(date: java.time.LocalDate) {
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, bottom = 4.dp)  // ← уменьшил bottom с 6.dp до 4.dp
+            .padding(start = 4.dp, bottom = 4.dp)
     )
 }
 
@@ -1692,7 +1605,7 @@ fun DateGroupContainer(content: @Composable () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {  // ← уменьшил с 6.dp до 4.dp
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
             content()
         }
     }

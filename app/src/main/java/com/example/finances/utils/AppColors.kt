@@ -212,8 +212,8 @@ data class ThemeGradients(
         val casesBlue = Color(0xFF1A2A4A)
 
 
-        val casesRedLight = Color(0xFFEF8C8C)
-        val casesGreenLight = Color(0xFFC8FFBE)
+        val casesRedLight = Color(0x7CEA4242)
+        val casesGreenLight = Color(0x7962FF4A)
         val casesYellowLight = Color(0xFFFFD30B)
         val casesBlueLight = Color(0xFF0544C9)
 

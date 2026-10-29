@@ -24,6 +24,17 @@ abstract class DataTransactions: RoomDatabase() {
     abstract fun categorySettingsDao(): CategorySettingsDao
     abstract fun planSettingsDao(): PlanSettingsDao
     companion object{
+
+
+        @Volatile
+        private var INSTANCE: DataTransactions? = null
+
+        @Volatile
+        private var TEST_INSTANCE: DataTransactions? = null
+
+
+
+
         fun getDatabase(context: Context): DataTransactions{
             return Room.databaseBuilder(
                 context,
@@ -31,5 +42,27 @@ abstract class DataTransactions: RoomDatabase() {
                 "data"
             ).build()
         }
+
+
+        fun getTestDatabase(context: Context): DataTransactions {
+            return TEST_INSTANCE ?: synchronized(this) {
+                TEST_INSTANCE ?: Room.inMemoryDatabaseBuilder(
+                    context,
+                    DataTransactions::class.java
+                )
+                    .allowMainThreadQueries()
+                    .build()
+                    .also { TEST_INSTANCE = it }
+            }
+        }
+
+        /**
+         * Очистка тестовой БД между тестами
+         */
+        fun clearTestDatabase() {
+            TEST_INSTANCE?.close()
+            TEST_INSTANCE = null
+        }
+
     }
 }

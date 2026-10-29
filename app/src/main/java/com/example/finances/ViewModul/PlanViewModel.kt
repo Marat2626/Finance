@@ -119,23 +119,18 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-
     fun createPlanFromDb(selections: Map<String, ImportanceType>) {
         viewModelScope.launch {
             try {
                 val allExpenses = db.dataExcelDao().getAllExpenses().first()
-
-                // Сохраняем цели
                 val allPlans = db.planSettingsDao().getAll().first()
                 val goalPlans = allPlans.filter { it.category.startsWith("goal_") }
 
-                // Очищаем
                 db.planSettingsDao().deleteAll()
                 if (goalPlans.isNotEmpty()) {
                     db.planSettingsDao().insertAll(goalPlans)
                 }
 
-                // Суммируем по важностям из selections
                 var essentialSum = 0.0
                 var neutralSum = 0.0
                 var nonEssentialSum = 0.0
@@ -154,7 +149,6 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // Сохраняем 3 записи
                 if (essentialSum > 0) db.planSettingsDao().insertAll(listOf(PlanSettings(importance = ImportanceType.ESSENTIAL, plannedAmount = essentialSum)))
                 if (neutralSum > 0) db.planSettingsDao().insertAll(listOf(PlanSettings(importance = ImportanceType.NEUTRAL, plannedAmount = neutralSum)))
                 if (nonEssentialSum > 0) db.planSettingsDao().insertAll(listOf(PlanSettings(importance = ImportanceType.NON_ESSENTIAL, plannedAmount = nonEssentialSum)))

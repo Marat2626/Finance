@@ -135,9 +135,6 @@ fun GoalDetailScreen(
         lastGoalViewModel.saveLastGoalId(selectedGoalId)
     }
 
-
-    val pendingGoalName = remember { mutableStateOf("") }
-    val pendingGoalAmount = remember { mutableStateOf<Double?>(null) }
     val showStrategySheet = remember { mutableStateOf(false) }
     val viewModelG: GoalViewModel = viewModel()
 
@@ -345,7 +342,7 @@ fun GoalDetailScreen(
                 onStrategySelected = { rec ->
                     viewModelG.saveGoal(
                         name = pendingGoalName.value,
-                        amount = rec.goalAmount,  // ← используем сумму из ML
+                        amount = if (rec.goalAmount > 0) rec.goalAmount else pendingGoalAmount.value!!,
                         savedAmount = 0.0,
                         monthsCount = rec.months,
                         monthlyPayment = rec.monthlyPayment,
@@ -475,8 +472,8 @@ fun topBar(showGoalFilter: Boolean,
             Text(
                 text = "ЦЕЛИ",
                 style = TextStyle(
-                    color = AppColors.current.text,
-                    fontSize = 20.sp,
+                    color = AppColors.current.icones,
+                    fontSize = 25.sp,
                     fontWeight = FontWeight.Bold
                 ),
                 modifier = Modifier.padding(start = 5.dp)
@@ -493,13 +490,13 @@ fun topBar(showGoalFilter: Boolean,
                             painter = painterResource(id = R.drawable.filter),
                             modifier = Modifier.size(24.dp),
                             contentDescription = "Выбрать цель",
-                            tint = Color(0xDA3D3D3D),
+                            tint = AppColors.current.icones,
                         )
                         Text(
                             text = "Список целей",
                             style = TextStyle(
-                                color =  AppColors.current.text,
-                                fontSize = 18.sp
+                                color =  AppColors.current.icones,
+                                fontSize = 20.sp
                             ),
                             modifier = Modifier.padding(start = 4.dp)
                         )
@@ -510,7 +507,7 @@ fun topBar(showGoalFilter: Boolean,
                         text = "+",
                         style = TextStyle(
                             fontSize = 40.sp,
-                            color = Color(0xDA3D3D3D),
+                            color = AppColors.current.icones,
                         )
                     )
                 }
@@ -622,7 +619,6 @@ fun CompactGoalCard(
                         style = TextStyle(
                             color =  AppColors.current.text,
                             fontSize = 20.sp,
-                            fontFamily = customFont,
                             fontWeight = FontWeight.Bold
                         ),
                         maxLines = 1,
@@ -1392,7 +1388,6 @@ fun PredictionCard(
                     modifier = Modifier
                         .height(120.dp)
                         .width(120.dp),
-//                        .padding(start = 15.dp),
                     Alignment.Center
 
                 ) {

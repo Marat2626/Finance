@@ -67,8 +67,8 @@ open class EISviewModel(
                     importance == ImportanceType.NON_ESSENTIAL || importance == null
                 }
 
-                Log.d("EISvm", "📊 Всего расходов: ${allExpenses.size}")
-                Log.d("EISvm", "🔍 Анализируем: ${filteredExpenses.size} (необязательные + неразмеченные)")
+                Log.d("EISvm", "Всего расходов: ${allExpenses.size}")
+                Log.d("EISvm", "Анализируем: ${filteredExpenses.size} (необязательные + неразмеченные)")
 
                 val holes = analyzer.findBlackHoles(filteredExpenses)
                 _blackHoles.value = holes
@@ -180,7 +180,7 @@ open class EISviewModel(
                     val excelTransactions = readExcelFromStream(inputStream, uri.toString())
 
 
-                    Log.d("Excel", "📊 ИМПОРТ ДАННЫХ ИЗ EXCEL")
+                    Log.d("Excel", "ИМПОРТ ДАННЫХ ИЗ EXCEL")
 
                     Log.d("Excel", "Всего транзакций: ${excelTransactions.size}")
 
@@ -190,7 +190,7 @@ open class EISviewModel(
                     val savingsSum = excelTransactions.filter { it.typeOfOperation == "Накопление" }.sumOf { it.amount }
 
                     Log.d("Excel", "")
-                    Log.d("Excel", "💰 СУММЫ ПО ТИПАМ:")
+                    Log.d("Excel", "СУММЫ ПО ТИПАМ:")
                     Log.d("Excel", "   • Расходы:     ${String.format("%,.2f", expensesSum)} ₽")
                     Log.d("Excel", "   • Доходы:      ${String.format("%,.2f", incomesSum)} ₽")
                     Log.d("Excel", "   • Накопления:  ${String.format("%,.2f", savingsSum)} ₽")
@@ -202,8 +202,8 @@ open class EISviewModel(
                     val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
                     Log.d("Excel", "")
-                    Log.d("Excel", "📅 ДИАПАЗОН ДАТ:")
-                    Log.d("Excel", "   • С: ${minDate?.format(dateFormatter) ?: "нет данных"}")
+                    Log.d("Excel", "ДИАПАЗОН ДАТ:")
+                    Log.d("Excel", "  • С: ${minDate?.format(dateFormatter) ?: "нет данных"}")
                     Log.d("Excel", "   • По: ${maxDate?.format(dateFormatter) ?: "нет данных"}")
 
 
@@ -254,7 +254,7 @@ open class EISviewModel(
                 val currentBalance = balanceDao.getBalance() ?: 0.0
                 val newBalance = currentBalance + incomes - expenses
                 balanceDao.saveBalance(Balance(id = 1, currentBalance = newBalance))
-                Log.d("BALANCE", "📥 Импорт: $currentBalance + $incomes - $expenses = $newBalance")
+                Log.d("BALANCE", "Импорт: $currentBalance + $incomes - $expenses = $newBalance")
             } catch (e: Exception) {
                 Log.e("EISviewModel", "Ошибка обновления баланса", e)
             }

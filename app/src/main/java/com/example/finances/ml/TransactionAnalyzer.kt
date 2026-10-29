@@ -5,10 +5,6 @@ import com.example.finances.DateExcel
 import kotlin.math.*
 import java.time.DayOfWeek
 
-/**
- * Анализатор финансовых транзакций на основе Isolation Forest (Machine Learning)
- * Находит "чёрные дыры" в расходах пользователя
- */
 class TransactionAnalyzer {
 
     companion object {
@@ -41,12 +37,12 @@ class TransactionAnalyzer {
      */
     fun findBlackHoles(expenses: List<DateExcel>): List<BlackHole> {
         Log.d(TAG, "═══════════════════════════════════════")
-        Log.d(TAG, "🚀 ЗАПУСК АНАЛИЗА «ЧЁРНЫХ ДЫР»")
+        Log.d(TAG, " ЗАПУСК АНАЛИЗА «ЧЁРНЫХ ДЫР»")
         Log.d(TAG, "═══════════════════════════════════════")
-        Log.d(TAG, "📊 Всего транзакций: ${expenses.size}")
+        Log.d(TAG, " Всего транзакций: ${expenses.size}")
 
         if (expenses.isEmpty()) {
-            Log.d(TAG, "❌ Нет данных для анализа")
+            Log.d(TAG, " Нет данных для анализа")
             return emptyList()
         }
 
@@ -57,7 +53,7 @@ class TransactionAnalyzer {
             }
 
         Log.d(TAG, "")
-        Log.d(TAG, "📋 КАТЕГОРИИ РАСХОДОВ:")
+        Log.d(TAG, " КАТЕГОРИИ РАСХОДОВ:")
         Log.d(TAG, "┌─────────────────────────────────────────────────────────────┐")
         Log.d(TAG, "│ Категория                 │ Кол-во │   Сумма    │ Средний  │")
         Log.d(TAG, "├─────────────────────────────────────────────────────────────┤")
@@ -68,7 +64,7 @@ class TransactionAnalyzer {
 
         // 1. Подготавливаем признаки для ML
         val featuresMap = prepareFeatures(expenses)
-        Log.d(TAG, "✅ Признаки подготовлены для ${featuresMap.size} категорий")
+        Log.d(TAG, "Признаки подготовлены для ${featuresMap.size} категорий")
 
         // 2. Для каждой категории обучаем Isolation Forest
         val anomalies = mutableListOf<DateExcel>()
@@ -76,7 +72,7 @@ class TransactionAnalyzer {
         featuresMap.forEach { (category, dataList) ->
             if (dataList.size >= 8) {
                 Log.d(TAG, "")
-                Log.d(TAG, "🔍 АНАЛИЗ КАТЕГОРИИ: $category (${dataList.size} транзакций)")
+                Log.d(TAG, "АНАЛИЗ КАТЕГОРИИ: $category (${dataList.size} транзакций)")
 
                 val features = dataList.map { it.toDoubleArray() }.toTypedArray()
 
@@ -91,31 +87,31 @@ class TransactionAnalyzer {
                     if (iso.isAnomaly(features[index])) {
                         anomalies.add(data.original)
                         anomalyCount++
-                        Log.d(TAG, "   ├─ 🔴 АНОМАЛИЯ: ${data.original.date.toLocalDate()} | ${String.format("%.0f", data.amount)}₽ | ${data.original.description.take(30)}")
+                        Log.d(TAG, "   ├─ АНОМАЛИЯ: ${data.original.date.toLocalDate()} | ${String.format("%.0f", data.amount)}₽ | ${data.original.description.take(30)}")
                     }
                 }
 
                 val anomalyPercent = (anomalyCount * 100.0 / dataList.size)
                 Log.d(TAG, "   └─ Найдено аномалий: $anomalyCount (${String.format("%.1f", anomalyPercent)}%)")
             } else {
-                Log.d(TAG, "⚠️ Категория '$category' - недостаточно данных (${dataList.size} < 8)")
+                Log.d(TAG, "Категория '$category' - недостаточно данных (${dataList.size} < 8)")
             }
         }
 
         Log.d(TAG, "")
-        Log.d(TAG, "📊 ВСЕГО АНОМАЛИЙ: ${anomalies.size}")
+        Log.d(TAG, "ВСЕГО АНОМАЛИЙ: ${anomalies.size}")
 
         // 3. Группируем аномалии в "чёрные дыры"
         val blackHoles = groupIntoBlackHoles(anomalies, expenses)
 
         Log.d(TAG, "")
         Log.d(TAG, "═══════════════════════════════════════")
-        Log.d(TAG, "🎯 НАЙДЕНО ЧЁРНЫХ ДЫР: ${blackHoles.size}")
+        Log.d(TAG, "НАЙДЕНО ЧЁРНЫХ ДЫР: ${blackHoles.size}")
         Log.d(TAG, "═══════════════════════════════════════")
 
         blackHoles.forEachIndexed { index, hole ->
             Log.d(TAG, "")
-            Log.d(TAG, "🔴 ДЫРА #${index + 1}: ${hole.category}")
+            Log.d(TAG, "ДЫРА #${index + 1}: ${hole.category}")
             Log.d(TAG, "   ├─ День недели: ${hole.dayOfWeek}")
             Log.d(TAG, "   ├─ Средний чек: ${String.format("%.0f", hole.avgAmount)}₽")
             Log.d(TAG, "   ├─ Норма: ${String.format("%.0f", hole.normalMedian)}₽")
@@ -126,7 +122,7 @@ class TransactionAnalyzer {
         }
 
         if (blackHoles.isEmpty()) {
-            Log.d(TAG, "✅ «Чёрных дыр» не обнаружено")
+            Log.d(TAG, "«Чёрных дыр» не обнаружено")
         }
 
         Log.d(TAG, "")
@@ -137,9 +133,6 @@ class TransactionAnalyzer {
         return blackHoles
     }
 
-    /**
-     * Подготовка признаков для ML
-     */
     private fun prepareFeatures(expenses: List<DateExcel>): Map<String, List<FeatureData>> {
         val byCategory = expenses
             .filter { it.category !in EXCLUDED_CATEGORIES }
@@ -163,16 +156,13 @@ class TransactionAnalyzer {
         return result
     }
 
-    /**
-     * Группировка аномалий в чёрные дыры
-     */
+
     private fun groupIntoBlackHoles(
         anomalies: List<DateExcel>,
         allExpenses: List<DateExcel>
     ): List<BlackHole> {
         val blackHoles = mutableListOf<BlackHole>()
 
-        // Группируем аномалии по категории + дню недели
         val grouped = anomalies.groupBy {
             Pair(it.category, it.date.dayOfWeek.value)
         }
@@ -182,7 +172,6 @@ class TransactionAnalyzer {
             if (group.size >= 2) {  // Минимум 2 повторения
                 val avgAmount = group.map { it.amount }.average()
 
-                // Нормальная медиана по ВСЕМ расходам в эту категорию и день
                 val normalTransactions = allExpenses.filter {
                     it.category == category && it.date.dayOfWeek.value == dayOfWeek
                 }
@@ -214,7 +203,6 @@ class TransactionAnalyzer {
             }
         }
 
-        // Сортируем по убыванию потерь
         return blackHoles.sortedByDescending { it.monthlyLoss }.take(3)
     }
 
@@ -229,7 +217,6 @@ class TransactionAnalyzer {
         }
     }
 
-    // Вспомогательный класс для признаков
     private data class FeatureData(
         val original: DateExcel,
         val amount: Double,
@@ -241,10 +228,6 @@ class TransactionAnalyzer {
     }
 }
 
-/**
- * РЕАЛИЗАЦИЯ ISOLATION FOREST (алгоритм машинного обучения)
- * Обнаруживает аномалии в данных
- */
 class IsolationForest(
     private val nTrees: Int = 100,
     private val contamination: Double = 0.1
@@ -266,9 +249,6 @@ class IsolationForest(
 
     fun getTreeCount() = trees.size
 
-    /**
-     * Обучить модель на данных
-     */
     fun fit(data: Array<DoubleArray>) {
         trees.clear()
         val sampleSize = minOf(256, data.size)
@@ -277,7 +257,6 @@ class IsolationForest(
         Log.d(TAG, "   ├─ Размер выборки: $sampleSize")
         Log.d(TAG, "   ├─ Размерность данных: ${data[0].size} признаков")
 
-        // Строим лес из nTrees деревьев
         for (i in 0 until nTrees) {
             val sample = if (data.size <= sampleSize) {
                 data
@@ -289,7 +268,6 @@ class IsolationForest(
 
         Log.d(TAG, "   ├─ Построено ${trees.size} деревьев")
 
-        // Вычисляем порог аномальности
         val scores = data.map { anomalyScore(it) }.sortedDescending()
         val cutoffIndex = (data.size * contamination).toInt()
         threshold = if (cutoffIndex < scores.size) scores[cutoffIndex] else scores.last()
@@ -297,9 +275,6 @@ class IsolationForest(
         Log.d(TAG, "   └─ Порог аномальности: ${String.format("%.3f", threshold)}")
     }
 
-    /**
-     * Проверить, является ли точка аномалией
-     */
     fun isAnomaly(features: DoubleArray): Boolean {
         val score = anomalyScore(features)
         return score > threshold

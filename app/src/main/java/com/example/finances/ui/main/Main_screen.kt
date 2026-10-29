@@ -49,8 +49,6 @@ fun mainScreen(
 ) {
     val filterViewModel: FilterViewModel = viewModel()
 
-
-    // Состояния из FilterViewModel
     val showFilterPanel by filterViewModel.showFilterPanel.collectAsState()
     val selectedPeriod by filterViewModel.selectedPeriod.collectAsState()
     val filteredTransactions by filterViewModel.filteredTransactions.collectAsState()
@@ -60,8 +58,6 @@ fun mainScreen(
     val expensesChangePercent by filterViewModel.expensesChangePercent.collectAsState()
     val incomesChangePercent by filterViewModel.incomesChangePercent.collectAsState()
 
-
-    // Данные из базы
     val context = LocalContext.current
     val db = DataTransactions.getDatabase(context)
     val transactionsFlow = db.dataExcelDao().GetAll()
@@ -72,8 +68,6 @@ fun mainScreen(
 
     val viewModelB: BalanseViewModel = viewModel()
     val balance by viewModelB.balanceFlow.collectAsState()
-
-    // Передаём транзакции во ViewModel
     LaunchedEffect(allTransactions) {
         filterViewModel.setTransactions(allTransactions)
     }
@@ -85,9 +79,6 @@ fun mainScreen(
         .fillMaxSize()
         .background(AppColors.current.screenBG)
     ) {
-
-
-
             LazyColumn(
                 modifier = Modifier
                     .padding(top = 40.dp)
@@ -95,8 +86,6 @@ fun mainScreen(
                     .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-
-
 
                 item {
 
@@ -126,7 +115,7 @@ fun mainScreen(
                             text = "Расходы",
                             amount = expensesSum,
                             changePercent = expensesChangePercent,
-                            procentColor = if (expensesChangePercent > 15) AppColors.current.textAlfa else AppColors.current.textAlfa,
+                            procentColor = if (expensesChangePercent > 15) AppColors.current.text else AppColors.current.text,
                             color =  AppColors.current.text,
                             modifier = Modifier
                                 .weight(1f)
@@ -139,7 +128,7 @@ fun mainScreen(
                             text = "Доходы",
                             amount = incomesSum,
                             changePercent = incomesChangePercent,
-                            procentColor = if (incomesChangePercent < 0) AppColors.current.textAlfa else AppColors.current.textAlfa,
+                            procentColor = if (incomesChangePercent < 0) AppColors.current.text else AppColors.current.text,
                             color = AppColors.current.text,
                             modifier = Modifier
                                 .weight(1f)
@@ -172,10 +161,7 @@ fun mainScreen(
                         }
                     }
 
-
                     Spacer(modifier = Modifier.height(16.dp))
-
-
 
                     Row(
                         modifier = Modifier
@@ -184,7 +170,6 @@ fun mainScreen(
                             .height(200.dp)
                             .padding(horizontal = 17.dp),
                     ) {
-                        // Круговая диаграмма
                         Column(
                             modifier = Modifier
                                 .cardShadow()
@@ -217,10 +202,6 @@ fun mainScreen(
                         ) {
                             Spacer(modifier = Modifier.height(8.dp))
                             categoryOfImportance()
-//                        YearlyIncomeTrendChart(
-//                            transactions = filteredTransactions,
-//                            modifier = Modifier.width(170.dp).height(150.dp)
-//                        )
                         }
                     }
 
@@ -244,8 +225,8 @@ fun mainScreen(
                 Text(
                     text = "Главная",
                     style = TextStyle(
-                        color = AppColors.current.text,
-                        fontSize = 20.sp,
+                        color = AppColors.current.icones,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Medium
                     ),
                     modifier = Modifier.padding(start = 20.dp)
@@ -262,16 +243,16 @@ fun mainScreen(
                     Icon(
                         painter = painterResource(id = R.drawable.filter),
                         modifier = Modifier
-                            .size(23.dp),
+                            .size(24.dp),
                         contentDescription = "Фильтер",
-                        tint = AppColors.current.text,
+                        tint = AppColors.current.icones,
 
                     )
                     Text(
                         text = if (selectedPeriod == "Все время") "Фильтр" else selectedPeriod,
                         style = TextStyle(
-                           color = AppColors.current.text,
-                            fontSize = 15.sp,
+                           color = AppColors.current.icones,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         modifier = Modifier.padding(start = 4.dp)
@@ -300,8 +281,6 @@ fun mainScreen(
     }
 }
 
-
-// ==================== boxStatic ====================
 @Composable
 fun boxStatic(
     text: String,
@@ -316,9 +295,6 @@ fun boxStatic(
         changePercent < 0 -> "$changePercent%"
         else -> "0%"
     }
-    val customFont = FontFamily(
-        Font(R.font.three, FontWeight.Normal)
-    )
 
     Box(
         modifier = modifier
@@ -336,9 +312,8 @@ fun boxStatic(
             Text(
                 color = color,
                 textAlign = TextAlign.Center,
-                fontFamily = customFont,
                 text = "${amount.formatWithSpace()} ₽",
-                fontSize = 26.sp,
+                fontSize = 23.sp,
                 fontWeight = FontWeight.W500,
                 modifier = Modifier.padding(start = 10.dp, )
             )
@@ -347,15 +322,15 @@ fun boxStatic(
                 Text(
                     style = TextStyle(procentColor),
                     textAlign = TextAlign.Center,
-                    text = "$procentText",
-                    fontSize = 12.sp,
+                    text = procentText,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 10.dp, top = 5.dp)
                 )
                 Text(
                      style = TextStyle(color =  AppColors.current.text) ,
                     text = "к прошлому мес.",
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 5.dp, top = 5.dp)
                 )
@@ -364,8 +339,6 @@ fun boxStatic(
     }
 }
 
-
-// ==================== FilterPanel (упрощённый для главного экрана) ====================
 @Composable
 fun FilterPanel(
     selectedPeriod: String,

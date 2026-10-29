@@ -183,23 +183,11 @@ class MainActivity : ComponentActivity() {
                         },
                         onAI = { navController.navigate("aiChat") },
                         onSettingScreen = { navController.navigate("settingsScreen") },
-                        onSettingDetails = { navController.navigate("categorySettingsScreen")
-                                           },
+
                         )
                 }
 
 
-                composable("categorySettingsScreen") {
-                    selectCategiry(
-                        onSave = { navController.popBackStack() },
-                        onNavigateToExpenseSettings = { category ->
-                            navController.navigate("expenseSettingsScreen/$category")
-                        },
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-
-
                 // Экран детальной настройки трат внутри категории
                 composable("expenseSettingsScreen/{category}") { backStackEntry ->
                     val category = backStackEntry.arguments?.getString("category") ?: ""
@@ -221,19 +209,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-
-
-                composable("selectCategiry") {
-                    selectCategiry(
-                        onSave = {
-                            navController.popBackStack()
-                        },
-                        onNavigateToExpenseSettings = { category ->  // ← передаём категорию
-                            navController.navigate("ExpenseSettingsScreen/$category")
-                        },
-                        onBack = { navController.navigate("mainScreen") },
-                    )
-                }
 
                 composable("ExpenseSettingsScreen/{category}") { backStackEntry ->
                     val category = backStackEntry.arguments?.getString("category") ?: ""
