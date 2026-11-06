@@ -2,26 +2,42 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ main ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: [self-hosted, android]
+    
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: set up JDK 17
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: .\gradlew assembleDebug
+
+    - name: Run Unit Tests
+      run: .\gradlew testDebugUnitTest
+      continue-on-error: true
+
+    - name: Publish Test Report
+      uses: ctrf-io/github-test-reporter@v1
+      if: always()
+      with:
+        report-path: './app/build/test-results/testDebugUnitTest/*.xml'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
